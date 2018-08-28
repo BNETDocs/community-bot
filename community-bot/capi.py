@@ -41,7 +41,11 @@ class capi_client(object):
             "Botapichat.MessageEventRequest": self.__handle_message_event,
             "Botapichat.SendMessageResponse": self.__handle_send_message_event,
             "Botapichat.SendWhisperResponse": self.__handle_send_whisper_response,
-            "Botapichat.SendEmoteResponse": self.__handle_send_emote_response
+            "Botapichat.SendEmoteResponse": self.__handle_send_emote_response,
+            "Botapichat.BanUserResponse": self.__handle_ban_user_response,
+            "Botapichat.UnbanUserResponse": self.__handle_unban_user_response,
+            "Botapichat.KickUserResponse": self.__handle_kick_user_response,
+            "Botapichat.SendSetModeratorResponse": self.__handle_set_moderator_response
         }
 
         self.open_requests = { }    # Tracks sent messages that haven't received a response.
@@ -106,7 +110,22 @@ class capi_client(object):
 
     def send_whisper(self, message, toon_name=None, user_id=None):
         id = user_id if user_id else self.get_user_id(toon_name)
-        return self.send_command("Botapichat.SendWhisperRequest", { "message": message, "user_id": id }) if id > 0 else False
+        return self.send_command("Botapichat.SendWhisperRequest", { "message": message, "user_id": id }) if id else False
+
+    def kick_user(self, toon_name=None, user_id=None):
+        id = user_id if user_id else self.get_user_id(toon_name)
+        return self.send_command("Botapichat.KickUserRequest", { "user_id": id }) if id else False
+
+    def ban_user(self, toon_name=None, user_id=None):
+        id = user_id if user_id else self.get_user_id(toon_name)
+        return self.send_command("Botapichat.BanUserRequest", { "user_id": id }) if id else False
+
+    def unban_user(self, toon_name):
+        return self.send_command("Botapichat.UnbanUserRequest", { "toon_name": toon_name })
+
+    def set_moderator(self, toon_name=None, user_id=None):
+        id = user_id if user_id else self.get_user_id(toon_name)
+        return self.send_command("Botapichat.SendSetModeratorRequest", { "user_id": id }) if id else False
 
 
     def __print(self, text):
@@ -256,6 +275,20 @@ class capi_client(object):
         if self.hide_chat: return
         self.__print("(Emote) %s: %s" % (self.get_toon_name(1), request.get("message")))
 
+    def __handle_ban_user_response(self, request, payload, status):
+        return
+
+    def __handle_unban_user_response(self, request, payload, status):
+        return
+
+    def __handle_kick_user_response(self, request, payload, status):
+        return
+
+    def __handle_set_moderator_response(self, request, payload, status):
+        return
+
+
+
 if __name__ == "__main__":
     api_key = None
     if len(sys.argv) > 1:
@@ -296,6 +329,30 @@ if __name__ == "__main__":
                 print("You must specify a command to send.")
             else:
                 client.send_command(m[1], json.loads(m[2]) if len(m) > 2 else { })
+        elif cmd == "/kick":
+            m = msg.split(maxsplit=2)
+            if len(m) < 2:
+                print("You must specify a user to kick.")
+            else:
+                client.kick_user(toon_name=m[1])
+        elif cmd == "/ban":
+            m = msg.split(maxsplit=2)
+            if len(m) < 2:
+                print("You must specify a user to ban.")
+            else:
+                client.ban_user(toon_name=m[1])
+        elif cmd == "/unban":
+            m = msg.split()
+            if len(m) < 2:
+                print("You must specify a user to unban.")
+            else:
+                client.unban_user(m[1])
+        elif cmd == "/op":
+            m = msg.split()
+            if len(m) < 2:
+                print("You must specify a user to give moderator status to.")
+            else:
+                client.set_moderator(toon_name=m[1])
         else:
             client.send_chat(msg)
 
