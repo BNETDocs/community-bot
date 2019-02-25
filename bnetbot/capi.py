@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 import ssl
 import threading
+import traceback
 import websocket
 
 
@@ -276,6 +277,7 @@ class CapiClient(threading.Thread):
                         self._handlers.get(command)(request, payload, status)
                     except Exception as ex:
                         print("ERROR! Something happened while processing received command '%s': %s" % (command, ex))
+                        print(traceback.format_exc())
 
     def _handle_auth_response(self, request, response, status):
         self._authenticating = False
