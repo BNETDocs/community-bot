@@ -1,35 +1,67 @@
 
-from bnetbot import capi
-
+from bnetbot import bot, commands
+import json
+import os
 import sys
 
 
-if len(sys.argv) > 1:
-    api_key = sys.argv[1]
+CONFIG_FILE = "config.json"
+
+# Check for a config file
+config = None
+if os.path.isfile(CONFIG_FILE):
+    with open(CONFIG_FILE, "r") as fh:
+        config = json.load(fh)
 else:
-    api_key = input("Enter your API key: ")
+    # Use supplied command-line argument or prompt user for API key.
+    if len(sys.argv) > 1:
+        api_key = sys.argv[1]
+    else:
+        api_key = input("Enter your API key: ")
 
-# Create the client and setup event handlers
-client = capi.CapiClient(api_key)
-client.debug_on = True
-client.handle_joined_chat = lambda c, u: print("Entered chat as '%s' in channel '%s'" % (u.name, c))
-client.handle_user_joined = lambda u: print("%s has joined." % u.name)
-client.handle_user_left = lambda u: print("%s has left." % u.name)
-client.handle_user_talk = lambda u, m: print("<%s> %s" % (u.name, m))
-client.handle_whisper = lambda u, m, r: print("<%s %s> %s" % ("From" if r else "To", u.name, m))
-client.handle_emote = lambda u, m: print("<%s %s>" % (u.name, m))
-client.handle_info = lambda m: print("INFO: %s" % m)
-client.handle_error = lambda m: print("ERROR: %s" % m)
+    config = {
+        "instances": {
+            "Main": {
+                "api_key": api_key
+            }
+        }
+    }
 
-# Connect.
-print("Connecting...")
-if client.connect():
-    print("Connected!")
-    client.start()
-else:
-    sys.exit(1)
+    # Save the config
+    with open(CONFIG_FILE, "w") as fh:
+        json.dump(config, fh, sort_keys=True, indent=4)
 
-# Process input while connected
+# Create the client and register commands
+bots = []
+for name, inst_config in config.get("instances", {}).items():
+    print("Loading instance: %s" % name)
+    bot = bot.BotInstance(name, inst_config)
+    bot.register_command("ping", "commands.internal.ping", lambda c: c.respond("pong"))
+    bot.register_command("whoami", "commands.internal.whoami",
+                         lambda c: c.respond("You are the bot console." if c.is_console() else
+                                             "You are %s. Flags: %s, Attributes: %s, Groups: %s" % (
+                                                c.user.name, c.user.flags, c.user.attributes,
+                                                [g.name for g in bot.database.user(c.user.name).groups.values()])
+                                             )
+                         )
+
+    # Start and connect the bot.
+    bot.start()
+    bots.append(bot)
+
+# If more than one instance is defined, only allow quit command.
+if len(bots) > 1:
+    while True:
+        if input() != "/quit":
+            print("Local commands are not supported when more than one instance is running.")
+        else:
+            for bot in bots:
+                bot.stop()
+            print("All connections closed.")
+            sys.exit(0)
+
+# Handle user input for single-instance mode.
+client = bot.client
 while client.connected():
     ip = input()
     if ip[0] == '/' and len(ip) > 1:
@@ -69,8 +101,12 @@ while client.connected():
             else:
                 client.error("Invalid syntax, use /%s <user>" % args[0])
         else:
-            client.error("Unrecognized commands. Try: quit, msg, emote, ban, unban, kick, designate")
+            inst = bot.parse_command(ip, None, commands.SOURCE_LOCAL)
+            if inst:
+                bot.execute_command(inst)
+            else:
+                client.error("Unrecognized command.")
     else:
         client.chat(ip)
 
-print("Disconnected.")
+print("All connections closed.")
