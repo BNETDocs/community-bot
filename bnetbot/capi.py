@@ -83,6 +83,7 @@ class CapiClient(threading.Thread):
             "Botapichat.UserUpdateEventRequest": self._handle_user_update_event,
             "Botapichat.UserLeaveEventRequest": self._handle_user_leave_event,
             "Botapichat.MessageEventRequest": self._handle_message_event,
+            "Botapichat.SendMessageResponse": self._handle_message_response,
             "Botapichat.SendWhisperResponse": self._handle_whisper_response
         }
 
@@ -91,6 +92,7 @@ class CapiClient(threading.Thread):
         self.handle_user_update = None      # user, flags, attributes
         self.handle_user_left = None        # user name
         self.handle_user_talk = None        # user, message
+        self.handle_bot_message = None      # message
         self.handle_whisper = None          # user, message, received
         self.handle_emote = None            # user, message
         self.handle_info = None             # message
@@ -367,6 +369,14 @@ class CapiClient(threading.Thread):
                 event(user, message, True)
             else:
                 event(user, message)
+
+    def _handle_message_response(self, request, response, status):
+        if status:
+            self.error("Failed to send message: %s" % status)
+        else:
+            payload = request.get("payload", {})
+            if self.handle_bot_message:
+                self.handle_bot_message(payload.get("message"))
 
     def _handle_whisper_response(self, request, response, status):
         if status:
