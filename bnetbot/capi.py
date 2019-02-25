@@ -37,6 +37,8 @@ class CapiUser:
         self.name = name
         self.flags = flags or []
         self.attributes = {}
+        if attributes:
+            self.update(attributes)
 
     def update(self, attr):
         if isinstance(attr, list):
