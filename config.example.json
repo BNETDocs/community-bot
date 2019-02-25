@@ -1,0 +1,19 @@
+{
+    "instances": {
+        "Main": {
+            "api_key": "0123456789abcdef",
+            "database": {
+                "users": {
+                    "botdev": {
+                        "groups": [
+                            "admin"
+                        ],
+                        "permissions": {
+                            "commands.internal.*": true
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
