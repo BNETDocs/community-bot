@@ -28,7 +28,7 @@ def main():
         print("Only one profile loaded - running in interactive mode")
 
         inst.handle_user_joined.register(lambda u: inst.print("%s has joined." % u.name))
-        inst.handle_user_left.register(lambda n: inst.print("%s has left." % n))
+        inst.handle_user_left.register(lambda u: inst.print("%s has left." % u.name))
         inst.handle_user_talk.register(lambda u, m: inst.print("<%s> %s" % (u.name, m)))
         inst.handle_bot_message.register(lambda m: inst.print("<%s> %s" % (inst.client.username, m)))
         inst.handle_whisper.register(
