@@ -1,112 +1,101 @@
 
-from bnetbot import bot, commands
-import json
-import os
-import sys
+from bnetbot import commands, instance
+from bnetbot.bot import BnetBot
+
+import argparse
+from datetime import datetime
 
 
-CONFIG_FILE = "config.json"
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--apikey", help="An API key to create a bot instance with.")
+    parser.add_argument("--config", help="The path to a config file to use.")
+    parser.add_argument("--debug", help="Prints debugging messages.", action="store_true")
 
-# Check for a config file
-config = None
-if os.path.isfile(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as fh:
-        config = json.load(fh)
-else:
-    # Use supplied command-line argument or prompt user for API key.
-    if len(sys.argv) > 1:
-        api_key = sys.argv[1]
+    # Parse program arguments and create the main bot instance.
+    p_args = parser.parse_args()
+    bot = BnetBot(p_args.config, p_args.debug)
+    print("Debug mode enabled: %s" % bot.debug)
+
+    # Create a new profile with the API key
+    if p_args.apikey:
+        inst = instance.BotInstance("Temp" + str(datetime.now().timestamp()).split('.')[1], {"api_key": p_args.apikey})
+        bot.load_instance(inst)
+
+    if len(bot.instances) == 1:
+        # Only one instance is running, so make it interactive.
+        inst = list(bot.instances.values())[0]
+        print("Only one profile loaded - running in interactive mode")
+
+        inst.handle_user_joined.register(lambda u: inst.print("%s has joined." % u.name))
+        inst.handle_user_left.register(lambda n: inst.print("%s has left." % n))
+        inst.handle_user_talk.register(lambda u, m: inst.print("<%s> %s" % (u.name, m)))
+        inst.handle_bot_message.register(lambda m: inst.print("<%s> %s" % (inst.client.username, m)))
+        inst.handle_whisper.register(
+            lambda u, m, r: inst.print("<%s %s> %s" % ("From" if r else "To", u.name, m)))
+        inst.handle_emote.register(lambda u, m: inst.print("<%s %s>" % (u.name, m)))
+        inst.handle_info.register(lambda m: inst.print("INFO: %s" % m))
+
+        bot.start()
+        client = inst.client
+        while client.connected():
+            ip = input()
+            if ip[0] == '/' and len(ip) > 1:
+                args = ip.split()
+                cmd = args[0][1:].lower()
+
+                if cmd == "quit":
+                    client.disconnect(True)
+                elif cmd in ["w", "whisper", "m", "msg"]:
+                    if len(args) > 2:
+                        client.chat(' '.join(args[2:]), args[1])
+                    else:
+                        client.error("Invalid syntax, use: /%s <user> <message>" % args[0])
+                elif cmd in ["me", "emote"]:
+                    if len(args) > 1:
+                        client.chat(' '.join(args[1:]), client.username)
+                    else:
+                        client.error("Invalid syntax, use /%s <message>" % args[0])
+                elif cmd == "ban":
+                    if len(args) > 1:
+                        client.ban(args[1])
+                    else:
+                        client.error("Invalid syntax, use /ban <user>")
+                elif cmd == "unban":
+                    if len(args) > 1:
+                        client.unban(args[1])
+                    else:
+                        client.error("Invalid syntax, use /unban <user>")
+                elif cmd == "kick":
+                    if len(args) > 1:
+                        client.ban(args[1], True)
+                    else:
+                        client.error("Invalid syntax, use /kick <user>")
+                elif cmd in ["op", "designate"]:
+                    if len(args) > 1:
+                        client.set_moderator(args[1])
+                    else:
+                        client.error("Invalid syntax, use /%s <user>" % args[0])
+                else:
+                    inst = inst.parse_command(ip, None, commands.SOURCE_LOCAL)
+                    if inst:
+                        inst.execute_command(inst)
+                    else:
+                        client.error("Unrecognized command.")
+            else:
+                client.chat(ip)
     else:
-        api_key = input("Enter your API key: ")
+        print("Loaded %i profiles - running in limited mode" % len(bot.instances))
 
-    config = {
-        "instances": {
-            "Main": {
-                "api_key": api_key
-            }
-        }
-    }
-
-    # Save the config
-    with open(CONFIG_FILE, "w") as fh:
-        json.dump(config, fh, sort_keys=True, indent=4)
-
-# Create the client and register commands
-bots = []
-for name, inst_config in config.get("instances", {}).items():
-    print("Loading instance: %s" % name)
-    bot = bot.BotInstance(name, inst_config)
-    bot.register_command("ping", "commands.internal.ping", lambda c: c.respond("pong"))
-    bot.register_command("whoami", "commands.internal.whoami",
-                         lambda c: c.respond("You are the bot console." if c.is_console() else
-                                             "You are %s. Flags: %s, Attributes: %s, Groups: %s" % (
-                                                c.user.name, c.user.flags, c.user.attributes,
-                                                [g.name for g in bot.database.user(c.user.name).groups.values()])
-                                             )
-                         )
-
-    # Start and connect the bot.
-    bot.start()
-    bots.append(bot)
-
-# If more than one instance is defined, only allow quit command.
-if len(bots) > 1:
-    while True:
-        if input() != "/quit":
-            print("Local commands are not supported when more than one instance is running.")
-        else:
-            for bot in bots:
+        bot.start()
+        while bot.running:
+            if input() != "/quit":
+                print("Local commands are not supported when more than one instance is running.")
+            else:
                 bot.stop()
-            print("All connections closed.")
-            sys.exit(0)
 
-# Handle user input for single-instance mode.
-client = bot.client
-while client.connected():
-    ip = input()
-    if ip[0] == '/' and len(ip) > 1:
-        args = ip.split()
-        cmd = args[0][1:].lower()
+    print("All connections closed.")
 
-        if cmd == "quit":
-            client.disconnect(True)
-        elif cmd in ["w", "whisper", "m", "msg"]:
-            if len(args) > 2:
-                client.chat(' '.join(args[2:]), args[1])
-            else:
-                client.error("Invalid syntax, use: /%s <user> <message>" % args[0])
-        elif cmd in ["me", "emote"]:
-            if len(args) > 1:
-                client.chat(' '.join(args[1:]), client.username)
-            else:
-                client.error("Invalid syntax, use /%s <message>" % args[0])
-        elif cmd == "ban":
-            if len(args) > 1:
-                client.ban(args[1])
-            else:
-                client.error("Invalid syntax, use /ban <user>")
-        elif cmd == "unban":
-            if len(args) > 1:
-                client.unban(args[1])
-            else:
-                client.error("Invalid syntax, use /unban <user>")
-        elif cmd == "kick":
-            if len(args) > 1:
-                client.ban(args[1], True)
-            else:
-                client.error("Invalid syntax, use /kick <user>")
-        elif cmd in ["op", "designate"]:
-            if len(args) > 1:
-                client.set_moderator(args[1])
-            else:
-                client.error("Invalid syntax, use /%s <user>" % args[0])
-        else:
-            inst = bot.parse_command(ip, None, commands.SOURCE_LOCAL)
-            if inst:
-                bot.execute_command(inst)
-            else:
-                client.error("Unrecognized command.")
-    else:
-        client.chat(ip)
 
-print("All connections closed.")
+if __name__ == "__main__":
+    main()

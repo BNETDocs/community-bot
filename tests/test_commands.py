@@ -1,5 +1,5 @@
 
-from bnetbot.bot import *
+from bnetbot.instance import *
 from bnetbot.commands import *
 import unittest
 
