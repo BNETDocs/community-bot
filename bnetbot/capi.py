@@ -127,9 +127,6 @@ class CapiClient(threading.Thread):
         except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
             self.debug("Connection failed: %s" % ex)
             return False
-
-        self._authenticating = True
-        self.request("Botapiauth.AuthenticateRequest", {"api_key": self.api_key})
         return True
 
     def disconnect(self, force=False):
@@ -221,6 +218,9 @@ class CapiClient(threading.Thread):
         if not self.connected():
             if not self.connect():
                 return
+
+        self._authenticating = True
+        self.request("Botapiauth.AuthenticateRequest", {"api_key": self.api_key})
 
         # Receive and process incoming messages
         while self.connected():
