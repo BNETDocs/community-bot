@@ -178,21 +178,23 @@ class CapiClient(threading.Thread):
         return request_id
 
     def chat(self, message, target=None):
-        if target:
-            my_user = self.get_user(self.username)
-            is_emote = isinstance(target, str) and target.lower() == self.username.lower()
-            is_emote = is_emote or isinstance(target, int) and target == my_user.id
+        command = "Botapichat.SendMessageRequest"
+        payload = {"message": message}
 
-            if is_emote:
-                return self.request("Botapichat.SendEmoteRequest", {"message": message})
-            else:
+        if target:
+            if isinstance(target, (str, int)):
                 target = self.get_user(target)
-                if target is None:
-                    self.error("Whisper failed - user not found")
-                else:
-                    return self.request("Botapichat.SendWhisperRequest", {"user_id": target.id, "message": message})
-        else:
-            return self.request("Botapichat.SendMessageRequest", {"message": message})
+            elif not isinstance(target, CapiUser):
+                return self.error("Send message failed - target user not found")
+
+            if target.name.lower() == self.username.lower():
+                # Target is ourselves, so this should be an emote.
+                command = "Botapichat.SendEmoteRequest"
+            else:
+                command = "Botapichat.SendWhisperRequest"
+                payload["user_id"] = target.id
+
+        return self.request(command, payload)
 
     def ban(self, target, kick=False):
         user = self.get_user(target)
