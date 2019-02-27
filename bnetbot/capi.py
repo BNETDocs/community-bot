@@ -73,6 +73,7 @@ class CapiClient(threading.Thread):
         self._authenticating = False
         self._connected = False
         self._disconnecting = False
+        self._endpoint = "wss://connect-bot.classic.blizzard.com/v1/rpc/chat"
         self._requests = {}
         self._received_users = False
         self._socket = None
@@ -117,9 +118,10 @@ class CapiClient(threading.Thread):
 
     def connect(self, endpoint=None):
         self._socket = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
+        self._endpoint = (endpoint or self._endpoint)
 
         try:
-            self._socket.connect(endpoint or "wss://connect-bot.classic.blizzard.com/v1/rpc/chat")
+            self._socket.connect(self._endpoint)
             self._connected = True
             self.last_message = datetime.now()
         except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
