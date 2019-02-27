@@ -26,6 +26,10 @@ class BnetBot:
             if cfg.get("enabled", True) and name.lower() not in self.instances:
                 self.load_instance(BotInstance(name, cfg), False)
 
+        # Create a connectivity monitoring thread
+        self.monitor = threading.Thread(target=self._run_monitor)
+        self.monitor.setDaemon(True)
+
     def load_instance(self, inst, save=True):
         # Add to the config
         if save:
@@ -61,6 +65,9 @@ class BnetBot:
         for inst in self.instances.values():
             inst.start()
 
+        # Start the connection monitor
+        self.monitor.start()
+
     def stop(self):
         self.running = False
 
@@ -71,3 +78,24 @@ class BnetBot:
         # Save the config
         with open(self.config_path, "w") as fh:
             json.dump(self.config, fh)
+
+    def _run_monitor(self):
+        # Checks each client at the configured interval. If no messages have been received since the last check,
+        #  send a client ping (which should trigger a response). If still no message is received by the following
+        #  check, forcibly reconnect the client.
+
+        keep_alive_interval = self.config.get("keep_alive", 10)
+        while self.running:
+            now = datetime.now()
+            for inst in self.instances.values():
+                diff = (now - inst.client.last_message).total_seconds()
+                if diff >= (keep_alive_interval * 2) or not inst.client.connected():
+                    # Reconnect the client
+                    print("Monitor has detected instance '%s' as down - attempting to reconnect..." % inst.name)
+                    inst.client.disconnect(True)
+                    inst.client.connect()
+                elif diff >= keep_alive_interval and inst.client.connected():
+                    # Send a ping
+                    inst.client.ping(str(now))
+
+            time.sleep(keep_alive_interval)
