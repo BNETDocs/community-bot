@@ -7,9 +7,10 @@ from bnetbot.events import *
 
 def raise_event(e, *args):
     if isinstance(e, PriorityDispatcher):
-        e.dispatch(*args)
+        return e.dispatch(*args)
     elif e is not None:
         e(*args)
+    return True
 
 
 class BotInstance:

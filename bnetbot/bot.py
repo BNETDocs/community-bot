@@ -45,13 +45,15 @@ class BnetBot:
             self.instances[key] = inst
             inst.client.debug_on = self.debug
 
+            def whoami_cmd(c):
+                c.respond("You are the bot console." if c.is_console() else
+                          "You are %s. Flags: %s, Attributes: %s, Groups: %s" % (
+                              c.user.name, c.user.flags, c.user.attributes,
+                              [g.name for g in inst.database.user(c.user.name).groups.values()])
+                          )
+
             inst.register_command("ping", "commands.internal.ping", lambda c: c.respond("pong"))
-            inst.register_command("whoami", "commands.internal.whoamai",
-                                  lambda c: c.respond("You are the bot console." if c.is_console() else
-                                                      "You are %s. Flags: %s, Attributes: %s, Groups: %s" % (
-                                                         c.user.name, c.user.flags, c.user.attributes,
-                                                         [g.name for g in inst.database.user(c.user.name).groups.values()])
-                                                      ))
+            inst.register_command("whoami", "commands.internal.whoami", whoami_cmd)
         else:
             raise Exception("An instance with that name is already loaded.")
 
