@@ -57,7 +57,7 @@ class BotInstance:
     def register_command(self, command, permission, callback):
         self.commands[command.lower()] = CommandDefinition(command, permission, callback)
 
-    def parse_command(self, message, user=None, source=None):
+    def parse_command(self, message, source=None):
         source = source or SOURCE_INTERNAL
         trigger = "/" if source in [SOURCE_LOCAL, SOURCE_INTERNAL] else self.config.get("trigger", "!")
 
@@ -66,20 +66,30 @@ class BotInstance:
             args = message.split()
             cmd = args[0][len(trigger):]
             args = args[1:] if len(args) > 1 else []
-            return CommandInstance(cmd, args, user, source)
+            return CommandInstance(cmd, args, source, trigger)
         else:
             return None     # Not a valid command
 
-    def execute_command(self, instance):
+    def execute_command(self, instance, run_as=None):
+        if not run_as and instance.user:
+            run_as = self.database.user(instance.user.name)
+        elif isinstance(run_as, str):
+            run_as = self.database.user(run_as)
+        elif run_as and not isinstance(run_as, DatabaseItem):
+            raise TypeError("Commands can only be run as a DatabaseItem object.")
+
+        instance.user = run_as
         command = self.commands.get(instance.command.lower())
-        user = self.database.user(instance.user.name)
+
         if command:
             instance.bot = self
-            if command.permission is None or \
-                    (user is not None and user.check_permission(command.permission)):
-                instance.has_permission = True
+            if command.permission is None or (run_as and run_as.check_permission(command.permission)):
                 command.callback(instance)
-            return instance
+            elif run_as:
+                instance.respond("You do not have permission to use that command.")
+        else:
+            instance.respond("Unrecognized command.")
+        return instance
 
     def _handle_joined_chat(self, channel, user):
         self.print("Logged on as '%s' in channel '%s'" % (user.name, channel))
@@ -98,9 +108,9 @@ class BotInstance:
         if not raise_event(self.handle_user_talk, user, message):
             return
 
-        cmd = self.parse_command(message, user, SOURCE_PUBLIC)
+        cmd = self.parse_command(message, SOURCE_PUBLIC)
         if cmd:
-            self.execute_command(cmd)
+            self.execute_command(cmd, user.name)
 
     def _handle_bot_message(self, message):
         raise_event(self.handle_bot_message, message)
@@ -113,9 +123,9 @@ class BotInstance:
         if not received:
             return
 
-        cmd = self.parse_command(message, user, SOURCE_PRIVATE)
+        cmd = self.parse_command(message, SOURCE_PRIVATE)
         if cmd:
-            self.execute_command(cmd)
+            self.execute_command(cmd, user.name)
 
     def _handle_emote(self, user, message):
         raise_event(self.handle_emote, user, message)

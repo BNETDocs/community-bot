@@ -56,32 +56,10 @@ def main():
                         client.chat(' '.join(args[1:]), client.username)
                     else:
                         client.error("Invalid syntax, use /%s <message>" % args[0])
-                elif cmd == "ban":
-                    if len(args) > 1:
-                        client.ban(args[1])
-                    else:
-                        client.error("Invalid syntax, use /ban <user>")
-                elif cmd == "unban":
-                    if len(args) > 1:
-                        client.unban(args[1])
-                    else:
-                        client.error("Invalid syntax, use /unban <user>")
-                elif cmd == "kick":
-                    if len(args) > 1:
-                        client.ban(args[1], True)
-                    else:
-                        client.error("Invalid syntax, use /kick <user>")
-                elif cmd in ["op", "designate"]:
-                    if len(args) > 1:
-                        client.set_moderator(args[1])
-                    else:
-                        client.error("Invalid syntax, use /%s <user>" % args[0])
                 else:
-                    inst = inst.parse_command(ip, None, commands.SOURCE_LOCAL)
-                    if inst:
-                        inst.execute_command(inst)
-                    else:
-                        client.error("Unrecognized command.")
+                    obj = inst.parse_command(ip, commands.SOURCE_LOCAL)
+                    if obj:
+                        inst.execute_command(obj, "%root%")   # Run as root
             else:
                 client.chat(ip)
     else:

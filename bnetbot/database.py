@@ -13,6 +13,12 @@ def get_default_groups():
     return groups
 
 
+def get_default_users():
+    return {
+        "%root%": DatabaseItem("%root%", False, ["*"])
+    }
+
+
 def load_item(data, name, is_group):
     item = DatabaseItem(name, is_group)
     item.permissions = data.get("permissions", {})
@@ -55,7 +61,27 @@ def load(config):
 class UserDatabase:
     def __init__(self):
         self.groups = get_default_groups()
-        self.users = {}
+        self.users = get_default_users()
+
+    def add(self, item):
+        if not isinstance(item, DatabaseItem):
+            raise TypeError("Can't add type %s to user database." % type(item).__name__)
+
+        if item.is_group:
+            self.groups[item.name.lower()] = item
+        else:
+            self.users[item.name.lower()] = item
+        return item
+
+    def remove(self, item):
+        if not isinstance(item, DatabaseItem):
+            raise TypeError("Can't remove type %s from the user database." % type(item).__name__)
+
+        if item.is_group:
+            del self.groups[item.name.lower()]
+        else:
+            del self.users[item.name.lower()]
+        return None
 
     def user(self, username):
         return self.users.get(username.lower())
@@ -65,10 +91,10 @@ class UserDatabase:
 
 
 class DatabaseItem:
-    def __init__(self, name, is_group):
+    def __init__(self, name, is_group, permissions=None):
         self.name = name
         self.is_group = is_group
-        self.permissions = {}
+        self.permissions = {p: True for p in permissions} if permissions else {}
         self.groups = {}
         self.added = datetime.now()
         self.modified = None
@@ -79,7 +105,7 @@ class DatabaseItem:
 
         # Check for permission provided by a group assignment
         group_perm = False
-        for group in filter(lambda x: x is not None, self.groups.values()):
+        for group in filter(None, self.groups.values()):
             if group.check_permission(permission):
                 # Permission allowed by a group
                 group_perm = True
@@ -96,3 +122,16 @@ class DatabaseItem:
 
         return group_perm or direct_perm
 
+    def get_permissions(self):
+        perms = []
+        for group in filter(None, self.groups.values()):
+            perms.extend(group.get_permissions())
+        for perm, value in self.permissions.items():
+            if value:
+                perms.append(perm)
+            elif perm in perms:
+                perms.remove(perm)
+        return list(set(perms))
+
+    def group_list(self):
+        return [g.name for g in self.groups.values()]
