@@ -143,6 +143,9 @@ class AdminCommands:
             c.respond("Set permission '%s' for %s '%s' to '%s'." %
                       (value.lower(), item_type, item.name, "ALLOW" if allow else "DENY"))
 
+        # Save changes to the config
+        db.save(c.bot.config)
+
 
 class InternalCommands:
     def __init__(self):

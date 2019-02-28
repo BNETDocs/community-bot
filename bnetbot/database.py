@@ -19,43 +19,8 @@ def get_default_users():
     }
 
 
-def load_item(data, name, is_group):
-    item = DatabaseItem(name, is_group)
-    item.permissions = data.get("permissions", {})
-    item.added = data.get("added")
-    item.modified = data.get("modified")
-    item.modified_by = data.get("modified_by")
-    return item
-
-
-def load(config):
-    db = UserDatabase()
-    data = config.get("database")
-    if data is None:
-        return db   # No database found in config - return empty
-
-    # Load group names and metadata
-    group_list = data.get("groups", {})
-    for name, group in group_list.items():
-        db.groups[name.lower()] = load_item(group, name, True)
-
-    # Link group names to objects
-    for name, group in group_list.items():
-        item = db.groups[name.lower()]
-
-        for group_name in [gp.lower() for gp in group.get("groups", [])]:
-            item.groups[group_name] = db.groups.get(group_name)
-
-    # Load users
-    for name, user in data.get("users", {}).items():
-        item = load_item(user, name, False)
-        db.users[name.lower()] = item
-
-        # Link user groups
-        for group_name in [gp.lower() for gp in user.get("groups", [])]:
-            item.groups[group_name] = db.groups.get(group_name)
-
-    return db
+def parse_isoformat(s):
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S.%f") if s else None
 
 
 class UserDatabase:
@@ -88,6 +53,46 @@ class UserDatabase:
 
     def group(self, group_name):
         return self.groups.get(group_name.lower())
+
+    def save(self, config):
+        data = {"groups": {}, "users": {}}
+
+        for group in self.groups.values():
+            group.save(data)
+        for user in self.users.values():
+            user.save(data)
+
+        config["database"] = data
+
+    @classmethod
+    def load(cls, config):
+        db = UserDatabase()
+        data = config.get("database")
+        if data is None:
+            return db  # No database found in config - return empty
+
+        # Load group names and metadata
+        group_list = data.get("groups", {})
+        for name, group in group_list.items():
+            db.groups[name.lower()] = DatabaseItem.load(group, name, True)
+
+        # Link group names to objects
+        for name, group in group_list.items():
+            item = db.groups[name.lower()]
+
+            for group_name in [gp.lower() for gp in group.get("groups", [])]:
+                item.groups[group_name] = db.groups.get(group_name)
+
+        # Load users
+        for name, user in data.get("users", {}).items():
+            item = DatabaseItem.load(user, name, False)
+            db.users[name.lower()] = item
+
+            # Link user groups
+            for group_name in [gp.lower() for gp in user.get("groups", [])]:
+                item.groups[group_name] = db.groups.get(group_name)
+
+        return db
 
 
 class DatabaseItem:
@@ -135,3 +140,24 @@ class DatabaseItem:
 
     def group_list(self):
         return [g.name for g in self.groups.values()]
+
+    def save(self, config):
+        item = config["groups" if self.is_group else "users"][self.name] = {}
+
+        item["permissions"] = self.permissions or []
+
+        if self.added:
+            item["added"] = self.added.isoformat()
+        if self.modified:
+            item["modified"] = self.modified.isoformat()
+        if self.modified_by:
+            item["modified_by"] = self.modified_by
+
+    @classmethod
+    def load(cls, data, name, is_group):
+        item = DatabaseItem(name, is_group)
+        item.permissions = data.get("permissions", {})
+        item.added = parse_isoformat(data.get("added")) or datetime.now()
+        item.modified = parse_isoformat(data.get("modified"))
+        item.modified_by = data.get("modified_by")
+        return item

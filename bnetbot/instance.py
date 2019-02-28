@@ -1,7 +1,7 @@
 
 from bnetbot.capi import CapiClient
 from bnetbot.commands import *
-from bnetbot.database import load as load_database
+from bnetbot.database import UserDatabase
 from bnetbot.events import *
 
 
@@ -18,7 +18,7 @@ class BotInstance:
         self.name = name or "Unnamed"
         self.config = config or {}
         self.commands = {}
-        self.database = load_database(self.config)
+        self.database = UserDatabase.load(self.config)
 
         # Create chat client and hook events
         self.client = CapiClient(self.config.get("api_key"))
@@ -45,6 +45,7 @@ class BotInstance:
     def stop(self, force=False):
         self.print("Stopping...")
         self.client.disconnect(force)
+        self.database.save(self.config)
 
     def print(self, text):
         print("[%s] %s" % (self.name, text))
