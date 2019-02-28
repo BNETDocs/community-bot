@@ -183,16 +183,20 @@ class CapiClient(threading.Thread):
 
         if target:
             if isinstance(target, (str, int)):
-                target = self.get_user(target)
+                user = self.get_user(target)
+                if not user:
+                    return self.error("Send message failed - target not found: %s" % target)
             elif not isinstance(target, CapiUser):
-                return self.error("Send message failed - target user not found")
+                return self.error("Send message failed - target type not valid: %s" % type(target).__name__)
+            else:
+                user = target
 
-            if target.name.lower() == self.username.lower():
+            if user.name.lower() == self.username.lower():
                 # Target is ourselves, so this should be an emote.
                 command = "Botapichat.SendEmoteRequest"
             else:
                 command = "Botapichat.SendWhisperRequest"
-                payload["user_id"] = target.id
+                payload["user_id"] = user.id
 
         return self.request(command, payload)
 

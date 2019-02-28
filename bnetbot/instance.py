@@ -50,7 +50,7 @@ class BotInstance:
         print("[%s] %s" % (self.name, text))
 
     def send(self, message, target=None):
-        lines = message.replace('\r', '').split('\n')
+        lines = message.replace('\r', '').split('\n') if isinstance(message, str) else message
         for line in lines:
             self.client.chat(line, target)
 
