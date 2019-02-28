@@ -3,6 +3,7 @@ from bnetbot import commands, instance
 from bnetbot.bot import BnetBot
 
 import argparse
+import atexit
 from datetime import datetime
 
 
@@ -15,6 +16,14 @@ def main():
     # Parse program arguments and create the main bot instance.
     p_args = parser.parse_args()
     bot = BnetBot(p_args.config, p_args.debug)
+
+    def shutdown(b):
+        print("Shutting down...")
+        if b.running:
+            b.stop(True)
+
+    atexit.register(shutdown, bot)
+
     print("Debug mode enabled: %s" % bot.debug)
 
     # Create a new profile with the API key

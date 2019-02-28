@@ -132,7 +132,7 @@ class CapiClient(threading.Thread):
     def disconnect(self, force=False):
         if force:
             self.debug("Forcing disconnect.")
-            self._socket.close()
+            self._socket.shutdown()
             self._authenticating = False
             self._connected = False
             self.channel = None

@@ -65,12 +65,12 @@ class BnetBot:
         # Start the connection monitor
         self.monitor.start()
 
-    def stop(self):
+    def stop(self, force=False):
         self.running = False
 
         # Disconnect and stop the loaded instances.
         for inst in self.instances.values():
-            inst.stop()
+            inst.stop(force)
 
         # Save the config
         with open(self.config_path, "w") as fh:
