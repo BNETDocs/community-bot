@@ -74,7 +74,7 @@ class BnetBot:
 
         # Save the config
         with open(self.config_path, "w") as fh:
-            json.dump(self.config, fh)
+            json.dump(self.config, fh, sort_keys=True, indent=4)
 
     def _run_monitor(self):
         # Checks each client at the configured interval. If no messages have been received since the last check,
