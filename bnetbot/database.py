@@ -4,10 +4,12 @@ import re
 
 
 def get_default_groups():
-    groups = {}
-    g = DatabaseItem("Admin", True)
-    g.permissions["commands.*"] = True
-    groups["admin"] = g
+    groups = {
+        "admin": DatabaseItem("Admin", True, ["commands.*"]),
+        "moderator": DatabaseItem("Moderator", True, ["commands.moderation.*"]),
+        "user": DatabaseItem("User", True, ["commands.internal.*"])
+    }
+    groups["moderator"].groups["user"] = groups["user"]
     return groups
 
 
