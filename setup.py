@@ -9,4 +9,6 @@ setup(name='community-bot',
       author_email='staff@bnetdocs.org',
       license='MIT',
       url='https://bnetdocs.org/',
-     )
+      install_requires=['websocket-client>=0.53.0'],
+      packages=["bnetbot"]
+      )
