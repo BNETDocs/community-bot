@@ -202,20 +202,22 @@ class CapiClient(threading.Thread):
 
     def ban(self, target, kick=False):
         user = self.get_user(target)
-        if user is None:
-            self.error("Kick/ban failed - user not found")
-        else:
+        if user:
             command = "Botapichat.KickUserRequest" if kick else "Botapichat.BanUserRequest"
             return self.request(command, {"user_id": user.id})
 
     def unban(self, user):
+        if isinstance(user, CapiUser):
+            # This isn't normal since banned users aren't in the channel, but just in case the object was stored..
+            user = user.name
+        elif not isinstance(user, str):
+            raise TypeError("Unban target user must be str name or user object.")
+
         return self.request("Botapichat.UnbanUserRequest", {"toon_name": user})
 
     def set_moderator(self, target):
         user = self.get_user(target)
-        if user is None:
-            self.error("Set moderator failed - user not found")
-        else:
+        if user:
             return self.request("Botapichat.SendSetModeratorRequest", {"user_id": user.id})
 
     def run(self):
