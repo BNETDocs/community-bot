@@ -346,7 +346,7 @@ class CapiClient(threading.Thread):
         # The attributes system isn't complete yet so alert the user to any abnormalities.
         if user.attributes and len(user.attributes) > 0:
             pgm = user.attributes.get("ProgramId")
-            if pgm and pgm != "W2BN":
+            if pgm and pgm not in ["W2BN", "SEXP"]:
                 print("NOTICE! Detected new ProgramID: %s" % pgm)
             if len(user.attributes) > 1 or pgm is None:
                 print("NOTICE! Detected new attributes: %s" % user.attributes)
