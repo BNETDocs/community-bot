@@ -1,19 +1,34 @@
 {
     "instances": {
         "Main": {
-            "api_key": "0123456789abcdef",
+            "api_key": "",
             "database": {
-                "users": {
-                    "botdev": {
-                        "groups": [
-                            "admin"
-                        ],
+                "groups": {
+                    "Admin": {
+                        "permissions": {
+                            "commands.*": true
+                        }
+                    },
+                    "Moderator": {
+                        "permissions": {
+                            "commands.moderation.*": true
+                        }
+                    },
+                    "User": {
                         "permissions": {
                             "commands.internal.*": true
                         }
                     }
+                },
+                "users": {
+                    "%root%": {
+                        "permissions": {
+                            "*": true
+                        }
+                    }
                 }
-            }
+            },
+            "enabled": true
         }
     }
 }
