@@ -1,6 +1,7 @@
 
 from bnetbot import commands, instance
 from bnetbot.bot import BnetBot
+from bnetbot.events import *
 
 import argparse
 import atexit
@@ -15,20 +16,59 @@ def main():
 
     # Parse program arguments and create the main bot instance.
     p_args = parser.parse_args()
-    bot = BnetBot(p_args.config, p_args.debug)
+    should_load = p_args.apikey is None         # Only load instances if no API key given.
+    bot = BnetBot(p_args.config, p_args.debug, should_load)
 
+    # Clean shutdown the bot on termination
     def shutdown(b):
         print("Shutting down...")
         if b.running:
             b.stop(True)
-
     atexit.register(shutdown, bot)
 
     print("Debug mode enabled: %s" % bot.debug)
 
-    # Create a new profile with the API key
+    # If an API key is given in the command-line args, create+run a profile with that key only.
     if p_args.apikey:
-        inst = instance.BotInstance("Temp" + str(datetime.now().timestamp()).split('.')[1], {"api_key": p_args.apikey})
+        inst = None
+
+        # Find an instance with a matching API key
+        instances = bot.config.get("instances", {})
+        for name, cfg in instances.values():
+            if cfg.get("api_key").lower() == p_args.apikey.lower():
+                inst = instance.BotInstance(name, cfg)
+                break
+
+        # If no matching instance was found, create a new one.
+        if inst is None:
+            time_based_number = str(datetime.now().timestamp()).split('.')[1]
+            instance_name = ("Temp" + time_based_number) if len(instances) > 0 else "Main"
+            print("Creating instance: %s" % instance_name)
+            inst = instance.BotInstance(instance_name, {"api_key": p_args.apikey})
+
+            def handle_first_login(c, u):
+                # If name has already been changed, ignore.
+                if not inst.name.startswith("Temp"):
+                    return
+
+                # Update the instance name to a more friendly one.
+                old_name = inst.name
+                new_name = base_name = c.title().replace(' ', '')
+                modifier = 2
+                while new_name.lower() in instances:
+                    new_name = base_name + str(modifier)
+                    modifier += 1
+                inst.name = new_name
+
+                # Remove the old one and assign the new
+                print("Updating instance name for '%s' to '%s'." % (old_name, new_name))
+                del instances[old_name]
+                instances[inst.name] = inst.config
+                bot.config["instances"] = instances
+
+            inst.handle_joined_chat.register(handle_first_login, PRIORITY_HIGH)     # Update name on login
+
+        # Load the instance.
         bot.load_instance(inst)
 
     if len(bot.instances) == 1:

@@ -10,7 +10,7 @@ import time
 
 
 class BnetBot:
-    def __init__(self, config=None, debug=False):
+    def __init__(self, config=None, debug=False, auto_load=True):
         # Load config
         self.config_path = config or "config.json"
         if path.isfile(self.config_path):
@@ -23,9 +23,10 @@ class BnetBot:
         # Load the configured instances.
         self.instances = {}
         self.running = False
-        for name, cfg in self.config.get("instances", {}).items():
-            if cfg.get("enabled", True) and name.lower() not in self.instances:
-                self.load_instance(BotInstance(name, cfg), False)
+        if auto_load:
+            for name, cfg in self.config.get("instances", {}).items():
+                if cfg.get("enabled", True) and name.lower() not in self.instances:
+                    self.load_instance(BotInstance(name, cfg), False)
 
         # Create a connectivity monitoring thread
         self.monitor = threading.Thread(target=self._run_monitor)
