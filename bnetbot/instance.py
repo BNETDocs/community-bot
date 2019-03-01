@@ -81,6 +81,8 @@ class BotInstance:
 
         instance.user = run_as
         command = self.commands.get(instance.command.lower())
+        self.print("Attempting to run command '%s' as user '%s' with arguments: %s." %
+                   (instance.command, run_as.name, instance.args))
 
         if command:
             instance.bot = self
@@ -88,6 +90,8 @@ class BotInstance:
                 command.callback(instance)
             elif run_as:
                 instance.respond("You do not have permission to use that command.")
+                self.print("Access denied for user '%s' - missing required permission: %s." %
+                           (run_as.name, command.permission))
         else:
             instance.respond("Unrecognized command.")
         return instance
