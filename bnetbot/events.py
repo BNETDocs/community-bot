@@ -19,10 +19,15 @@ class PriorityDispatcher:
         if priority not in self.handlers:
             self.handlers[priority] = []
         self.handlers[priority].append(callback)
+        return callback
 
     def unregister(self, callback):
+        count = 0
         for handlers in self.handlers.values():
-            handlers.remove(callback)
+            if callback in handlers:
+                handlers.remove(callback)
+                count += 1
+        return count
 
     # Returns FALSE if the event is veto'd by one of the handlers.
     def dispatch(self, *args):
