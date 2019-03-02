@@ -111,6 +111,8 @@ def main():
                         inst.execute_command(obj, "%root%")   # Run as root
             else:
                 client.chat(ip)
+    elif len(bot.instances) == 0:
+        print("No profiles found. Run the bot with the '--apikey=<your API key>' switch to create a new one.")
     else:
         print("Loaded %i profiles - running in limited mode" % len(bot.instances))
 
