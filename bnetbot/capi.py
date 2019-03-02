@@ -123,7 +123,7 @@ class CapiClient:
         try:
             self._socket.connect(self._endpoint)
             self._connected = True
-            self.uptime = self.last_message = datetime.now()
+            self.uptime = self.last_message = datetime.utcnow()
 
             self._thread = threading.Thread(target=self._receive)
             self._thread.setDaemon(True)

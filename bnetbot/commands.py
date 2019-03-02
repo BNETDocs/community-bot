@@ -163,17 +163,17 @@ class InternalCommands:
 
     @staticmethod
     def time(c):
-        c.respond("Local time: %s" % datetime.now().strftime("%A, %B %w %Y at %I:%M %p %Z"))
+        c.respond("Local time: %s" % datetime.now().strftime("%A, %B %w %Y at %I:%M %p"))
 
     @staticmethod
     def uptime(c):
-        seconds = int((datetime.now() - c.bot.client.uptime ).total_seconds())
+        seconds = int((datetime.utcnow() - c.bot.client.uptime).total_seconds())
         hours, rem = divmod(seconds, 3600)
         minutes, seconds = divmod(rem, 60)
         days, hours = divmod(hours, 24)
 
-        c.respond("Connection uptime: %i days, %i hours, %i minutes, %i seconds (since %s)" %
-                  (days, hours, minutes, seconds, c.bot.client.uptime .strftime("%a, %b %w %Y at %I:%M %p %Z")))
+        c.respond("Connection uptime: %i days, %i hours, %i minutes, %i seconds (since %s UTC)" %
+                  (days, hours, minutes, seconds, c.bot.client.uptime .strftime("%a, %b %w %Y at %I:%M %p")))
 
     @staticmethod
     def whoami(c):
