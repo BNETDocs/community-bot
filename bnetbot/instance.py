@@ -72,24 +72,29 @@ class BotInstance:
 
     def execute_command(self, instance, run_as=None):
         if not run_as and instance.user:
-            run_as = self.database.user(instance.user.name)
+            user = self.database.user(instance.user.name)
         elif isinstance(run_as, str):
-            run_as = self.database.user(run_as)
+            user = self.database.user(run_as)
         elif run_as and not isinstance(run_as, DatabaseItem):
             raise TypeError("Commands can only be run as a DatabaseItem object.")
+        else:
+            user = run_as
 
-        instance.user = run_as
+        instance.user = user
         command = self.commands.get(instance.command.lower())
-        self.print("Attempting to run command '%s' as user '%s' with arguments: %s." %
-                   (instance.command, run_as.name, instance.args))
 
         if command:
-            if command.permission is None or (run_as and run_as.check_permission(command.permission)):
+            self.print("Attempting to run command '%s' as user '%s' with arguments: %s." %
+                       (instance.command, user.name if user else run_as, instance.args))
+
+            if command.permission is None or (user and user.check_permission(command.permission)):
                 command.callback(instance)
-            elif run_as:
+            elif user:
                 instance.respond("You do not have permission to use that command.")
                 self.print("Access denied for user '%s' - missing required permission: %s." %
-                           (run_as.name, command.permission))
+                           (user.name, command.permission))
+            else:
+                self.print("Access denied for user '%s' - no permissions" % run_as)
         else:
             instance.respond("Unrecognized command.")
         return instance
