@@ -146,7 +146,7 @@ class DatabaseItem:
     def save(self, config):
         item = config["groups" if self.is_group else "users"][self.name] = {}
 
-        item["permissions"] = self.permissions or []
+        item["permissions"] = self.permissions or {}
 
         if self.added:
             item["added"] = self.added.isoformat()
