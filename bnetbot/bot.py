@@ -82,16 +82,25 @@ class BnetBot:
         #  send a client ping (which should trigger a response). If still no message is received by the following
         #  check, forcibly reconnect the client.
 
+        connecting_instances = []
         keep_alive_interval = self.config.get("keep_alive", 10)
         while self.running:
             now = datetime.now()
             for inst in self.instances.values():
-                diff = (now - inst.client.last_message).total_seconds()
+                # Check for inactive or offline clients
+                last = inst.client.last_message
+                diff = (now - last).total_seconds() if last else keep_alive_interval
+
                 if diff >= (keep_alive_interval * 2) or not inst.client.connected():
+                    if inst not in connecting_instances:
+                        print("Monitor has detected instance '%s' as down - attempting to reconnect..." % inst.name)
+                        connecting_instances.append(inst)
+                        inst.client.disconnect(True)
+
                     # Reconnect the client
-                    print("Monitor has detected instance '%s' as down - attempting to reconnect..." % inst.name)
-                    inst.client.disconnect(True)
-                    inst.client.connect()
+                    if inst.client.connect():
+                        print("Connection successful. Resuming...")
+                        connecting_instances.remove(inst)
                 elif diff >= keep_alive_interval and inst.client.connected():
                     # Send a ping
                     inst.client.ping(str(now))

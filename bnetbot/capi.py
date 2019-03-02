@@ -61,7 +61,7 @@ class CapiUser:
         return False
 
 
-class CapiClient(threading.Thread):
+class CapiClient:
     def __init__(self, api_key):
         self.api_key = api_key
         self.channel = None
@@ -101,7 +101,6 @@ class CapiClient(threading.Thread):
         self.handle_emote = None            # user, message
         self.handle_info = None             # message
         self.handle_error = None            # message
-        super().__init__()
 
     def error(self, text):
         if self.handle_error:
@@ -117,17 +116,21 @@ class CapiClient(threading.Thread):
         return self._connected and self._socket is not None and self._socket.connected
 
     def connect(self, endpoint=None):
-        self._socket = websocket.WebSocket(sslopt={"cert_reqs": ssl.CERT_NONE})
+        self._socket = websocket.WebSocket(timeout=10, sslopt={"cert_reqs": ssl.CERT_NONE})
         self._endpoint = (endpoint or self._endpoint)
 
         try:
             self._socket.connect(self._endpoint)
             self._connected = True
-            self.last_message = datetime.now()
+            self.uptime = self.last_message = datetime.now()
+
+            self._thread = threading.Thread(target=self._receive)
+            self._thread.setDaemon(True)
+            self._thread.start()
+            return True
         except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
             self.debug("Connection failed: %s" % ex)
             return False
-        return True
 
     def disconnect(self, force=False):
         if force:
@@ -157,8 +160,12 @@ class CapiClient(threading.Thread):
         return None
 
     def ping(self, payload=None):
-        self._socket.ping(str(datetime.now() if payload is None else payload))
-        self.debug("Sent websocket PING")
+        try:
+            self._socket.ping(str(datetime.now() if payload is None else payload))
+            self.debug("Sent websocket PING")
+            return True
+        except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
+            return False
 
     def request(self, command, payload=None):
         # Find the next available request ID. Values are reused as long as there isn't a pending request with that ID.
@@ -220,7 +227,7 @@ class CapiClient(threading.Thread):
         if user:
             return self.request("Botapichat.SendSetModeratorRequest", {"user_id": user.id})
 
-    def run(self):
+    def _receive(self):
         global STATUS_CODES, OPCODES
 
         if not self.connected():
@@ -307,6 +314,7 @@ class CapiClient(threading.Thread):
 
     def _handle_disconnect_event(self, request, response, status):
         self.error("Disconnected from chat API.")
+        self.disconnect(True)
 
     def _handle_user_update_event(self, request, response, status):
         user_id = response.get("user_id")

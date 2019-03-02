@@ -40,7 +40,6 @@ class BotInstance:
         self.print("Connecting...")
         if self.client.connect():
             self.print("Connected!")
-            self.client.start()
 
     def stop(self, force=False):
         self.print("Stopping...")
