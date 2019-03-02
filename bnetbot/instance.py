@@ -66,7 +66,7 @@ class BotInstance:
             args = message.split()
             cmd = args[0][len(trigger):]
             args = args[1:] if len(args) > 1 else []
-            return CommandInstance(cmd, args, source, trigger)
+            return CommandInstance(cmd, args, source, trigger, self)
         else:
             return None     # Not a valid command
 
@@ -84,7 +84,6 @@ class BotInstance:
                    (instance.command, run_as.name, instance.args))
 
         if command:
-            instance.bot = self
             if command.permission is None or (run_as and run_as.check_permission(command.permission)):
                 command.callback(instance)
             elif run_as:

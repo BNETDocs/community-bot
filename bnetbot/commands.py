@@ -19,13 +19,13 @@ class CommandDefinition:
 
 
 class CommandInstance:
-    def __init__(self, command, args=None, source=None, trigger=None):
+    def __init__(self, command, args=None, source=None, trigger=None, bot=None):
         self.command = command
         self.args = args or []
         self.source = source or SOURCE_INTERNAL
         self.trigger = trigger
         self.response = []
-        self.bot = None
+        self.bot = bot
         self.user = None
 
     def respond(self, text=None):
