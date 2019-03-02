@@ -27,6 +27,7 @@ class UserDatabase:
     def __init__(self):
         self.groups = get_default_groups()
         self.users = get_default_users()
+        self.needs_write = False
 
     def add(self, item):
         if not isinstance(item, DatabaseItem):
@@ -63,6 +64,7 @@ class UserDatabase:
             user.save(data)
 
         config["database"] = data
+        self.needs_write = True
 
     @classmethod
     def load(cls, config):

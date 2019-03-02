@@ -73,8 +73,10 @@ class BnetBot:
         for inst in self.instances.values():
             inst.stop(force)
 
-        # Save the config
-        with open(self.config_path, "w") as fh:
+        self.save_config()
+
+    def save_config(self, save_path=None):
+        with open(save_path or self.config_path, "w") as fh:
             json.dump(self.config, fh, sort_keys=True, indent=4)
 
     def _run_monitor(self):
@@ -105,4 +107,9 @@ class BnetBot:
                     # Send a ping
                     inst.client.ping(str(now))
 
-            time.sleep(keep_alive_interval)
+                # Check for needed config writes
+                if inst.database.needs_write:
+                    self.save_config()
+                    inst.database.needs_write = False
+
+            time.sleep(1)

@@ -69,6 +69,7 @@ class CapiClient:
         self.last_message = None
         self.users = {}
         self.debug_on = False
+        self.uptime = None
 
         self._authenticating = False
         self._connected = False
@@ -143,6 +144,7 @@ class CapiClient:
             self.last_message = None
             self.users = {}
             self._requests = {}
+            self.uptime = None
         else:
             self._disconnecting = True
             self.request("Botapichat.DisconnectRequest")
