@@ -6,14 +6,14 @@ import unittest
 
 class TestCommandParsing(unittest.TestCase):
     def test_trigger(self):
-        bot = BotInstance()
+        bot = BotInstance("test")
         self.assertIsNone(bot.parse_command(".test", source=SOURCE_LOCAL))
         self.assertIsNotNone(bot.parse_command("/test", source=SOURCE_LOCAL))
         self.assertIsNotNone(bot.parse_command("!test", source=SOURCE_PUBLIC))
         self.assertIsNone(bot.parse_command(".test", source=SOURCE_PUBLIC))
 
     def test_parsing(self):
-        bot = BotInstance()
+        bot = BotInstance("test")
         cmd = bot.parse_command("/test 1 2 3")
         self.assertIsNotNone(cmd)
         self.assertEqual(cmd.command, "test")
