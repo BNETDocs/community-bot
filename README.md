@@ -1,5 +1,6 @@
 # BNETDocs Community Bot (BCB)
 [![Build Status](https://travis-ci.com/BNETDocs/community-bot.svg?branch=develop)](https://travis-ci.com/BNETDocs/community-bot)
+![Python 3.6 | 3.7](https://img.shields.io/badge/python-3.6%20%7C%203.7-blue)
 
 A WIP community-built bot written in Python (3.6) for the classic Battle.net v1 chat platform.
 
