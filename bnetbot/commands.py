@@ -12,6 +12,7 @@ SOURCE_INTERNAL = 4     # Automatic execution
 
 
 class CommandDefinition:
+    """Object linking a command name with its required permissions and function."""
     def __init__(self, command, permission, callback):
         self.name = command
         self.permission = permission
@@ -19,6 +20,7 @@ class CommandDefinition:
 
 
 class CommandInstance:
+    """A request to execute a command."""
     def __init__(self, command, args=None, source=None, trigger=None, bot=None):
         self.command = command
         self.args = args or []
@@ -29,6 +31,7 @@ class CommandInstance:
         self.user = None
 
     def respond(self, text=None):
+        """Sends the response text to the command source."""
         if text:
             self.response.append(text)
 
@@ -43,6 +46,7 @@ class CommandInstance:
             self.bot.send(self.response, self.user.name if self.source == SOURCE_PRIVATE else None)
 
     def is_console(self):
+        """Returns if the command was executed from the bot console or internally."""
         return self.source in [SOURCE_LOCAL, SOURCE_INTERNAL]
 
 
@@ -54,6 +58,7 @@ class AdminCommands:
 
     @staticmethod
     def perms(c):
+        """Manages database permissions for the bot instance."""
         syntax = "<group|user> <target> <add|remove|set> [value|permission] [allow|deny]"
         invalid_syntax_message = "Invalid syntax: %s%s %s" % (c.trigger, c.command, syntax)
 
@@ -159,14 +164,17 @@ class InternalCommands:
 
     @staticmethod
     def ping(c):
+        """Checks if the bot is alive and responsive."""
         c.respond("pong")
 
     @staticmethod
     def time(c):
+        """Gets the bot's local time."""
         c.respond("Local time: %s" % datetime.now().strftime("%A, %B %w %Y at %I:%M %p"))
 
     @staticmethod
     def uptime(c):
+        """Gets the time since the bot connected."""
         seconds = int(c.bot.uptime.total_seconds())
         hours, rem = divmod(seconds, 3600)
         minutes, seconds = divmod(rem, 60)
@@ -177,6 +185,7 @@ class InternalCommands:
 
     @staticmethod
     def whoami(c):
+        """Identifies the user issuing the command."""
         if c.is_console():
             c.respond("You are the bot console%s" %
                       (", in chat as '%s'." % c.bot.client.username) if c.bot.client.connected() else ".")
@@ -188,6 +197,7 @@ class InternalCommands:
 
     @staticmethod
     def whois(c):
+        """Identifies a user."""
         if len(c.args) != 1:
             return c.respond("Invalid syntax: %s%s <user>" % (c.trigger, c.command))
 
@@ -232,6 +242,7 @@ class ModerationCommands:
 
     @staticmethod
     def ban(c):
+        """Bans one or more users from the channel."""
         failed = []
         for target in c.args:
             if not c.bot.client.ban(target, False):
@@ -241,6 +252,7 @@ class ModerationCommands:
 
     @staticmethod
     def designate(c):
+        """Designates another user to be a channel operator."""
         if len(c.args) != 1:
             c.respond("Invalid syntax: %s%s <user>" % (c.trigger, c.command))
         elif not c.bot.client.set_moderator(c.args[0]):
@@ -248,6 +260,7 @@ class ModerationCommands:
 
     @staticmethod
     def kick(c):
+        """Kicks one or more users from the channel."""
         failed = []
         for target in c.args:
             if not c.bot.client.ban(target, True):
@@ -257,6 +270,7 @@ class ModerationCommands:
 
     @staticmethod
     def unban(c):
+        """Unbans one or more users from the channel."""
         for target in c.args:
             c.bot.client.unban(target)
 

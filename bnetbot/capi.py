@@ -35,16 +35,19 @@ OPCODES = {
 
 
 class CapiError:
+    """CAPI protocol error"""
     def __init__(self, message):
         self.message = message
         self.area = None
         self.code = None
 
     def get_reason(self):
+        """Returns the protocol-defined reason text for the error."""
         return STATUS_CODES.get(self.area, {}).get(self.code) or ("Unknown (%i-%i)" % (self.area, self.code))
 
     @classmethod
     def from_status(cls, status, message=None):
+        """Creates a CapiError object from the 'status' field of a message response."""
         ex = cls(None)
         ex.area = status.get("area")
         ex.code = status.get("code")
@@ -53,6 +56,7 @@ class CapiError:
 
 
 class CapiUser:
+    """CAPI user information"""
     def __init__(self, user_id, name, flags=None, attributes=None):
         self.id = user_id
         self.name = name
@@ -62,6 +66,7 @@ class CapiUser:
             self.update(attributes)
 
     def update(self, attr):
+        """Updates user attributes with new data."""
         if isinstance(attr, list):
             for item in attr:
                 if isinstance(item, dict):
@@ -75,6 +80,7 @@ class CapiUser:
             raise ValueError("Unexpected attribute format: %s" % type(attr).__name__)
 
     def has_flag(self, flag):
+        """Returns TRUE if the user has 'flag'."""
         for f in self.flags:
             if f.lower() == flag.lower():
                 return True
@@ -82,6 +88,7 @@ class CapiUser:
 
 
 class CapiClient(EventSource):
+    """Client for interacting with the Battle.net chat API."""
     def __init__(self, api_key):
         self._api_key = api_key
         self.channel = None
@@ -98,6 +105,7 @@ class CapiClient(EventSource):
         self._socket = None
         self._thread = None
 
+        # Command -> Handler
         self.message_handlers = {
             "Botapiauth.AuthenticateResponse": self._handle_auth_response,
             "Botapichat.ConnectResponse": self._handle_connect_response,
@@ -116,9 +124,15 @@ class CapiClient(EventSource):
         super().__init__(client_events)
 
     def connected(self):
+        """Returns TRUE if the client socket is connected."""
         return self._connected and self._socket is not None and self._socket.connected
 
     def connect(self, endpoint=None):
+        """Connects to a CAPI endpoint.
+
+            - endpoint: the URI of the chat API. If not set then the default or most recent will be used.
+            - Returns success of the connect operation.
+        """
         self._socket = websocket.WebSocket(timeout=10, sslopt={"cert_reqs": ssl.CERT_NONE})
         self.endpoint = (endpoint or self.endpoint)
 
@@ -129,12 +143,16 @@ class CapiClient(EventSource):
             self._thread = threading.Thread(target=self._receive)
             self._thread.setDaemon(True)
             self._thread.start()
-            return True
         except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
             self.events['client_error'](self, ex)
-            return False
+
+        return self._connected
 
     def disconnect(self, force=False):
+        """Disconnects from the chat API.
+
+            - force will shutdown the socket immediately and reset state variables and should be used after a disconnect.
+        """
         if force:
             self._socket.shutdown()
             self._authenticating = False
@@ -150,6 +168,7 @@ class CapiClient(EventSource):
             self.send("Botapichat.DisconnectRequest")
 
     def get_user(self, name):
+        """Returns an object representing the user identified by the given name or ID."""
         if isinstance(name, int):
             return self.users.get(name)
         elif isinstance(name, str):
@@ -162,6 +181,10 @@ class CapiClient(EventSource):
         return None
 
     def ping(self, payload=None):
+        """Sends a websocket PING command to the server.
+
+            - This is used for the keep-alive monitor and in most cases doesn't need to be called by anything else.
+        """
         try:
             self._socket.ping(str(datetime.now() if payload is None else payload))
             return True
@@ -170,6 +193,11 @@ class CapiClient(EventSource):
             return False
 
     def send(self, command, payload=None):
+        """Sends a command message to the server.
+
+            - command: the API request name as defined the API docs.
+            - payload: optional data sent with the request.
+        """
         # Find the next available request ID.
         # Values are reused once a response has been received with the same ID.
         request_id = 1
@@ -188,6 +216,13 @@ class CapiClient(EventSource):
         return request_id
 
     def chat(self, message, target=None):
+        """Sends a chat message to the channel.
+
+            - message: the text to send
+            - target: optional username, ID, or user object to send a direct message or emote
+
+            If target is the bot user, an /emote will be sent to the channel.
+        """
         command = "Botapichat.SendMessageRequest"
         payload = {"message": message}
 
@@ -211,12 +246,23 @@ class CapiClient(EventSource):
         return self.send(command, payload)
 
     def ban(self, target, kick=False):
+        """Kicks or bans a user from the channel.
+
+            - target: name, ID, or object of the user to kick/ban
+            - kick: optionally kicks the user instead of banning them
+
+            Note: The API does not support banning users not in the channel.
+        """
         user = self.get_user(target)
         if user:
             command = "Botapichat.KickUserRequest" if kick else "Botapichat.BanUserRequest"
             return self.send(command, {"user_id": user.id})
 
     def unban(self, user):
+        """Unbans a user from the channel.
+
+            - user: the name or user object to unban. The user must have a known name, an ID will not work.
+        """
         if isinstance(user, CapiUser):
             # This isn't normal since banned users aren't in the channel, but just in case the object was stored..
             user = user.name
@@ -226,6 +272,7 @@ class CapiClient(EventSource):
         return self.send("Botapichat.UnbanUserRequest", {"toon_name": user})
 
     def set_moderator(self, target):
+        """Gives chananel operator status to the target user."""
         user = self.get_user(target)
         if user:
             return self.send("Botapichat.SendSetModeratorRequest", {"user_id": user.id})

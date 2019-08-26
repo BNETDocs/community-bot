@@ -29,24 +29,32 @@ class BotInstance:
         return datetime.utcnow() - self._uptime
 
     def start(self):
+        """Connects and starts the bot instance."""
         self.log.debug("Connecting to CAPI endpoint '%s' ..." % self.client.endpoint)
         if self.client.connect():
             self.log.debug("Connection established!")
 
     def stop(self, force=False):
+        """Disconnects and shuts down the bot instance."""
         self.log.debug("Shutting down instance...")
         self.client.disconnect(force)
         self.database.save(self.config)
 
     def send(self, message, target=None):
+        """Sends a chat message to the connected channel.
+
+            If a message contains multiple lines, it will be split into separate messages.
+        """
         lines = message.replace('\r', '').split('\n') if isinstance(message, str) else message
         for line in lines:
             self.client.chat(line, target)
 
     def register_command(self, command, permission, callback):
+        """Registers a command to make it available."""
         self.commands[command.lower()] = CommandDefinition(command, permission, callback)
 
     def parse_command(self, message, source=None):
+        """Attempts to parse a message for a bot command. Returns the parsed command instance or NONE."""
         source = source or SOURCE_INTERNAL
         trigger = "/" if source in [SOURCE_LOCAL, SOURCE_INTERNAL] else self.config.get("trigger", "!")
 
@@ -56,10 +64,13 @@ class BotInstance:
             cmd = args[0][len(trigger):]
             args = args[1:] if len(args) > 1 else []
             return CommandInstance(cmd, args, source, trigger, self)
-        else:
-            return None     # Not a valid command
 
     def execute_command(self, instance, run_as=None):
+        """Executes a command.
+
+            run_as: an identifier for the database user that the command should be executed as.
+                If this user doesn't have permission to run the command, an error will be returned.
+        """
         if not run_as and instance.user:
             user = self.database.user(instance.user.name)
         elif isinstance(run_as, str):

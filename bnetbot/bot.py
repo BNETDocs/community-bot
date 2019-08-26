@@ -42,8 +42,8 @@ class BnetBot:
         self.monitor.setDaemon(True)
 
     def load_instance(self, inst, save=True):
-        # Add to the config
         if save:
+            # Save the instance's config (used when creating new instances).
             cfg = self.config.get("instances")
             if not cfg:
                 cfg = self.config["instances"] = {}
@@ -86,13 +86,15 @@ class BnetBot:
         self.save_config()
 
     def save_config(self, save_path=None):
+        """Saves the bot config to disk."""
         with open(save_path or self.config_path, "w") as fh:
             json.dump(self.config, fh, sort_keys=True, indent=4)
 
     def _run_monitor(self):
-        # Checks each client at the configured interval. If no messages have been received since the last check,
-        #  send a client ping (which should trigger a response). If still no message is received by the following
-        #  check, forcibly reconnect the client.
+        """ Checks each client at the configured interval. If no messages have been received since the last check,
+          send a client ping (which should trigger a response). If still no message is received by the following
+          check, forcibly reconnect the client.
+        """
 
         connecting_instances = []
         keep_alive_interval = self.config.get("keep_alive", 10)
