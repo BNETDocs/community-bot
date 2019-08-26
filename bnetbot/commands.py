@@ -1,5 +1,5 @@
 
-from bnetbot.database import DatabaseItem
+from .database import DatabaseItem
 
 from datetime import datetime
 

@@ -1,11 +1,12 @@
 
-from bnetbot import commands, instance
-from bnetbot.bot import BnetBot
-from bnetbot.events import *
+from . import commands, instance
+from .bot import BnetBot
+from .util.events import *
 
 import argparse
 import atexit
 from datetime import datetime
+import logging
 
 
 def main():
@@ -16,8 +17,13 @@ def main():
 
     # Parse program arguments and create the main bot instance.
     p_args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.DEBUG if p_args.debug else logging.INFO,
+        format="%(asctime)s: %(name)s - %(levelname)s: %(message)s"
+    )
+
     should_load = p_args.apikey is None         # Only load instances if no API key given.
-    bot = BnetBot(p_args.config, p_args.debug, should_load)
+    bot = BnetBot(p_args.config, should_load)
 
     # Clean shutdown the bot on termination
     def shutdown(b):
@@ -25,8 +31,6 @@ def main():
         if b.running:
             b.stop(True)
     atexit.register(shutdown, bot)
-
-    print("Debug mode enabled: %s" % bot.debug)
 
     # If an API key is given in the command-line args, create+run a profile with that key only.
     if p_args.apikey:
@@ -66,7 +70,7 @@ def main():
                 instances[inst.name] = inst.config
                 bot.config["instances"] = instances
 
-            inst.handle_joined_chat.register(handle_first_login, PRIORITY_HIGH)     # Update name on login
+            inst.client.events['joined_chat'].register(handle_first_login, PRIORITY_HIGH)     # Update name on login
 
         # Load the instance.
         bot.load_instance(inst)
@@ -76,17 +80,18 @@ def main():
         inst = list(bot.instances.values())[0]
         print("Only one profile loaded - running in interactive mode")
 
-        inst.handle_user_joined.register(lambda u: inst.print("%s has joined." % u.name))
-        inst.handle_user_left.register(lambda u: inst.print("%s has left." % u.name))
-        inst.handle_user_talk.register(lambda u, m: inst.print("<%s> %s" % (u.name, m)))
-        inst.handle_bot_message.register(lambda m: inst.print("<%s> %s" % (inst.client.username, m)))
-        inst.handle_whisper.register(
-            lambda u, m, r: inst.print("<%s %s> %s" % ("From" if r else "To", u.name, m)))
-        inst.handle_emote.register(lambda u, m: inst.print("<%s %s>" % (u.name, m)))
-        inst.handle_info.register(lambda m: inst.print("INFO: %s" % m))
+        client = inst.client
+        client.events['user_joined'].register(lambda c, u: print("%s has joined." % u.name))
+        client.events['user_left'].register(lambda c, u: print("%s has left." % u.name))
+        client.events['user_talk'].register(lambda c, u, m: print("<%s> %s" % (u.name, m)))
+        client.events['bot_talk'].register(lambda c, m: print("<%s> %s" % (c.username, m)))
+        client.events['whisper_sent'].register(lambda c, u, m: print("<To: %s> %s" % (u.name, m)))
+        client.events['whisper_received'].register(lambda c, u, m: print("<From: %s> %s" % (u.name, m)))
+        client.events['user_emote'].register(lambda c, u, m: print("<%s %s>" % (u.name, m)))
+        client.events['server_info'].register(lambda c, m: print("INFO: %s" % m))
+        client.events['server_error'].register(lambda c, m: print("ERROR: %s" % m))
 
         bot.start()
-        client = inst.client
         while client.connected():
             ip = input()
             if ip[0] == '/' and len(ip) > 1:
@@ -99,12 +104,12 @@ def main():
                     if len(args) > 2:
                         client.chat(' '.join(args[2:]), args[1])
                     else:
-                        client.error("Invalid syntax, use: /%s <user> <message>" % args[0])
+                        print("Invalid syntax, use: /%s <user> <message>" % args[0])
                 elif cmd in ["me", "emote"]:
                     if len(args) > 1:
                         client.chat(' '.join(args[1:]), client.username)
                     else:
-                        client.error("Invalid syntax, use /%s <message>" % args[0])
+                        print("Invalid syntax, use /%s <message>" % args[0])
                 else:
                     obj = inst.parse_command(ip, commands.SOURCE_LOCAL)
                     if obj:

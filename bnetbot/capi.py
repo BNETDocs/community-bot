@@ -1,4 +1,6 @@
 
+from .util.events import EventSource
+
 from datetime import datetime
 
 import json
@@ -32,6 +34,24 @@ OPCODES = {
 }
 
 
+class CapiError:
+    def __init__(self, message):
+        self.message = message
+        self.area = None
+        self.code = None
+
+    def get_reason(self):
+        return STATUS_CODES.get(self.area, {}).get(self.code) or ("Unknown (%i-%i)" % (self.area, self.code))
+
+    @classmethod
+    def from_status(cls, status, message=None):
+        ex = cls(None)
+        ex.area = status.get("area")
+        ex.code = status.get("code")
+        ex.message = message or ex.get_reason()
+        return ex
+
+
 class CapiUser:
     def __init__(self, user_id, name, flags=None, attributes=None):
         self.id = user_id
@@ -61,26 +81,24 @@ class CapiUser:
         return False
 
 
-class CapiClient:
+class CapiClient(EventSource):
     def __init__(self, api_key):
-        self.api_key = api_key
+        self._api_key = api_key
         self.channel = None
         self.username = None
         self.last_message = None
         self.users = {}
-        self.debug_on = False
-        self.uptime = None
+        self.endpoint = "wss://connect-bot.classic.blizzard.com/v1/rpc/chat"
 
         self._authenticating = False
         self._connected = False
         self._disconnecting = False
-        self._endpoint = "wss://connect-bot.classic.blizzard.com/v1/rpc/chat"
         self._requests = {}
         self._received_users = False
         self._socket = None
         self._thread = None
 
-        self._handlers = {
+        self.message_handlers = {
             "Botapiauth.AuthenticateResponse": self._handle_auth_response,
             "Botapichat.ConnectResponse": self._handle_connect_response,
             "Botapichat.ConnectEventRequest": self._handle_connect_event,
@@ -92,62 +110,44 @@ class CapiClient:
             "Botapichat.SendWhisperResponse": self._handle_whisper_response
         }
 
-        self.handle_joined_chat = None      # channel, user
-        self.handle_user_joined = None      # user
-        self.handle_user_update = None      # user, flags, attributes
-        self.handle_user_left = None        # user name
-        self.handle_user_talk = None        # user, message
-        self.handle_bot_message = None      # message
-        self.handle_whisper = None          # user, message, received
-        self.handle_emote = None            # user, message
-        self.handle_info = None             # message
-        self.handle_error = None            # message
-
-    def error(self, text):
-        if self.handle_error:
-            self.handle_error(text)
-        else:
-            print("ERROR: %s" % text)
-
-    def debug(self, text):
-        if self.debug_on:
-            print("DEBUG: %s" % text)
+        client_events = ['joined_chat', 'user_joined', 'user_update', 'user_left', 'user_talk', 'bot_talk',
+                         'whisper_sent', 'whisper_received', 'user_emote', 'server_info', 'server_error',
+                         'protocol_message_received', 'protocol_message_sent', 'left_chat', 'client_error']
+        super().__init__(client_events)
 
     def connected(self):
         return self._connected and self._socket is not None and self._socket.connected
 
     def connect(self, endpoint=None):
         self._socket = websocket.WebSocket(timeout=10, sslopt={"cert_reqs": ssl.CERT_NONE})
-        self._endpoint = (endpoint or self._endpoint)
+        self.endpoint = (endpoint or self.endpoint)
 
         try:
-            self._socket.connect(self._endpoint)
+            self._socket.connect(self.endpoint)
             self._connected = True
-            self.uptime = self.last_message = datetime.utcnow()
 
             self._thread = threading.Thread(target=self._receive)
             self._thread.setDaemon(True)
             self._thread.start()
             return True
         except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
-            self.debug("Connection failed: %s" % ex)
+            self.events['client_error'](self, ex)
             return False
 
     def disconnect(self, force=False):
         if force:
-            self.debug("Forcing disconnect.")
             self._socket.shutdown()
             self._authenticating = False
             self._connected = False
-            self.channel = None
             self._disconnecting = False
+
             self.last_message = None
+            self.channel = None
             self.users = {}
             self._requests = {}
-            self.uptime = None
         else:
             self._disconnecting = True
-            self.request("Botapichat.DisconnectRequest")
+            self.send("Botapichat.DisconnectRequest")
 
     def get_user(self, name):
         if isinstance(name, int):
@@ -164,13 +164,14 @@ class CapiClient:
     def ping(self, payload=None):
         try:
             self._socket.ping(str(datetime.now() if payload is None else payload))
-            self.debug("Sent websocket PING")
             return True
         except (websocket.WebSocketException, TimeoutError, ConnectionError) as ex:
+            self.events['client_error'](self, ex)
             return False
 
-    def request(self, command, payload=None):
-        # Find the next available request ID. Values are reused as long as there isn't a pending request with that ID.
+    def send(self, command, payload=None):
+        # Find the next available request ID.
+        # Values are reused once a response has been received with the same ID.
         request_id = 1
         while request_id in self._requests:
             request_id += 1
@@ -182,7 +183,7 @@ class CapiClient:
         }
 
         self._socket.send(json.dumps(data), websocket.ABNF.OPCODE_TEXT)
-        self.debug("Sent command: %s" % command)
+        self.events['protocol_message_sent'](self, data)
         self._requests[request_id] = data
         return request_id
 
@@ -194,40 +195,40 @@ class CapiClient:
             if isinstance(target, (str, int)):
                 user = self.get_user(target)
                 if not user:
-                    return self.error("Send message failed - target not found: %s" % target)
+                    self.events['client_error'](self, CapiError("Chat target not found: %s" % target))
+                    return False
+                target = user
             elif not isinstance(target, CapiUser):
-                return self.error("Send message failed - target type not valid: %s" % type(target).__name__)
-            else:
-                user = target
+                raise TypeError("Chat target must be user name, numeric ID, or object.")
 
-            if user.name.lower() == self.username.lower():
+            if target.name.lower() == self.username.lower():
                 # Target is ourselves, so this should be an emote.
                 command = "Botapichat.SendEmoteRequest"
             else:
                 command = "Botapichat.SendWhisperRequest"
-                payload["user_id"] = user.id
+                payload["user_id"] = target.id
 
-        return self.request(command, payload)
+        return self.send(command, payload)
 
     def ban(self, target, kick=False):
         user = self.get_user(target)
         if user:
             command = "Botapichat.KickUserRequest" if kick else "Botapichat.BanUserRequest"
-            return self.request(command, {"user_id": user.id})
+            return self.send(command, {"user_id": user.id})
 
     def unban(self, user):
         if isinstance(user, CapiUser):
             # This isn't normal since banned users aren't in the channel, but just in case the object was stored..
             user = user.name
         elif not isinstance(user, str):
-            raise TypeError("Unban target user must be str name or user object.")
+            raise TypeError("Unban target must be user name or object.")
 
-        return self.request("Botapichat.UnbanUserRequest", {"toon_name": user})
+        return self.send("Botapichat.UnbanUserRequest", {"toon_name": user})
 
     def set_moderator(self, target):
         user = self.get_user(target)
         if user:
-            return self.request("Botapichat.SendSetModeratorRequest", {"user_id": user.id})
+            return self.send("Botapichat.SendSetModeratorRequest", {"user_id": user.id})
 
     def _receive(self):
         global STATUS_CODES, OPCODES
@@ -237,7 +238,7 @@ class CapiClient:
                 return
 
         self._authenticating = True
-        self.request("Botapiauth.AuthenticateRequest", {"api_key": self.api_key})
+        self.send("Botapiauth.AuthenticateRequest", {"api_key": self._api_key})
 
         # Receive and process incoming messages
         while self.connected():
@@ -251,19 +252,19 @@ class CapiClient:
                     # Unknown error - force close socket
                     return self.disconnect(True)
 
-            # Record the message received time
+            # Record the message received time for keep-alive tracking
             self.last_message = datetime.now()
+
             if opcode != websocket.ABNF.OPCODE_TEXT:
-                self.debug("Received opcode: %s (%i)" % (OPCODES.get(opcode, "Unknown"), opcode))
                 # These are just control messages and can be ignored.
                 continue
 
-            # Decode the message
             try:
                 message = data.decode('utf-8')
                 data = json.loads(message)
+                self.events['protocol_message_received'](self, data)
             except json.JSONDecodeError:
-                # Possibly corrupt message but just ignore it (the API is in alpha after all!)
+                # Corrupt message but just ignore it (the API is in alpha after all!)
                 continue
 
             if isinstance(data, dict):
@@ -272,53 +273,47 @@ class CapiClient:
                 status = data.get("status")
                 payload = data.get("payload")
 
-                self.debug("Received command: %s" % command)
-
-                # Parse the status code if given
+                # Parse the optionally returned error status
+                error = None
                 if status and isinstance(status, dict):
-                    area = status.get("area")
-                    code = status.get("code")
+                    error = CapiError.from_status(status)
 
-                    status = STATUS_CODES.get(area)
-                    status = status and status.get(code)
-                    if not status:
-                        status = "Unknown (%i-%i)" % (area, code)
-
-                # Find the request that triggered this response
+                # Match this response to a sent request
                 request = None
                 if "Event" not in command:
                     if request_id in self._requests:
                         request = self._requests.get(request_id)
                         del self._requests[request_id]
 
-                if command in self._handlers:
+                if command in self.message_handlers:
                     try:
-                        self._handlers.get(command)(request, payload, status)
+                        self.message_handlers.get(command)(request, payload, error)
                     except Exception as ex:
                         print("ERROR! Something happened while processing received command '%s': %s" % (command, ex))
                         print(traceback.format_exc())
 
-    def _handle_auth_response(self, request, response, status):
+    def _handle_auth_response(self, request, response, error):
         self._authenticating = False
-        if status:
-            self.error("Authentication failed: %s" % status)
+        if error:
+            error.message = "Authentication failed."
+            self.events['client_error'](self, error)
         else:
-            self.request("Botapichat.ConnectRequest")
+            self.send("Botapichat.ConnectRequest")
 
-    def _handle_connect_response(self, request, response, status):
-        if status:
-            self.error("Failed to connect to chat: %s" % status)
+    def _handle_connect_response(self, request, response, error):
+        if error:
+            error.message = "Failed to connect to chat"
+            self.events['client_error'](self, error)
 
-    def _handle_connect_event(self, request, response, status):
+    def _handle_connect_event(self, request, response, error):
         self.channel = response.get("channel")
-        if self.handle_joined_chat:
-            self.handle_joined_chat(self.channel, self.get_user(self.username))
+        self.events['joined_chat'](self, self.channel, self.get_user(self.username))
 
-    def _handle_disconnect_event(self, request, response, status):
-        self.error("Disconnected from chat API.")
+    def _handle_disconnect_event(self, request, response, error):
+        self.events['left_chat'](self)
         self.disconnect(True)
 
-    def _handle_user_update_event(self, request, response, status):
+    def _handle_user_update_event(self, request, response, error):
         user_id = response.get("user_id")
         toon_name = response.get("toon_name")
         attributes = response.get("attribute")  # [{"key":1,"value":2}, etc]
@@ -345,17 +340,14 @@ class CapiClient:
                 elif user.id == 1 and not self._received_users:
                     self._received_users = True
                     changes = True
-                    self.debug("Users in channel: %s" % ", ".join(u.name for u in self.users.values()))
 
-                if changes and self.handle_user_update:
-                    self.handle_user_update(user, flags, attributes)
+                if changes:
+                    self.events['user_update'](self, user, flags, attributes)
             else:
                 if self._received_users:
-                    if self.handle_user_joined:
-                        self.handle_user_joined(user)
+                    self.events['user_joined'](self, user)
                 else:
-                    if self.handle_user_update:
-                        self.handle_user_update(user, flags, attributes)
+                    self.events['user_update'](self, user, flags, attributes)
 
         self.users[user.id] = user
 
@@ -367,48 +359,47 @@ class CapiClient:
             if len(user.attributes) > 1 or pgm is None:
                 print("NOTICE! Detected new attributes: %s" % user.attributes)
 
-    def _handle_user_leave_event(self, request, response, status):
+    def _handle_user_leave_event(self, request, response, error):
         user = self.get_user(response.get("user_id"))
         del self.users[user.id]
-        if self.handle_user_left:
-            self.handle_user_left(user)
+        self.events['user_left'](self, user)
 
-    def _handle_message_event(self, request, response, status):
+    def _handle_message_event(self, request, response, error):
         user = self.get_user(response.get("user_id"))
         mtype = response.get("type")
         message = response.get("message")
 
         handlers = {
-            "channel": self.handle_user_talk,
-            "emote": self.handle_emote,
-            "whisper": self.handle_whisper,
-            "serverinfo": self.handle_info,
-            "servererror": self.handle_error
+            "channel": 'user_talk',
+            "emote": 'user_emote',
+            "whisper": 'whisper_received',
+            "serverinfo": 'server_info',
+            "servererror": 'server_error'
         }
         event = handlers.get(mtype.lower())
         if event:
-            if mtype.lower() in ["serverinfo", "servererror"]:
-                event(message)
+            if mtype.lower() in ["serverinfo", "serverror"]:
+                self.events[event](self, message)
             elif mtype.lower() == "whisper":
-                event(user, message, True)
+                self.events[event](self, user, message)
             else:
-                event(user, message)
+                self.events[event](self, user, message)
 
-    def _handle_message_response(self, request, response, status):
-        if status:
-            self.error("Failed to send message: %s" % status)
+    def _handle_message_response(self, request, response, error):
+        if error:
+            error.message = "Failed to send message."
+            self.events['client_error'](self, error)
         else:
             payload = request.get("payload", {})
-            if self.handle_bot_message:
-                self.handle_bot_message(payload.get("message"))
+            self.events['bot_talk'](self, payload.get("message"))
 
-    def _handle_whisper_response(self, request, response, status):
-        if status:
-            self.error("Failed to send whisper: %s" % status)
+    def _handle_whisper_response(self, request, response, error):
+        if error:
+            error.message = "Failed to send whisper."
+            self.events['client_error'](self, error)
         else:
             payload = request.get("payload", {})
             target = self.get_user(payload.get("user_id"))
             message = payload.get("message")
 
-            if self.handle_whisper:
-                self.handle_whisper(target, message, False)
+            self.events['whisper_sent'](self, target, message)

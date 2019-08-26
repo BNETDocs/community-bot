@@ -1,16 +1,19 @@
 
-from bnetbot.commands import DEFINED_COMMANDS
-from bnetbot.instance import BotInstance
+from .commands import DEFINED_COMMANDS
+from .instance import BotInstance
 
 from datetime import datetime
 import json
+import logging
 from os import path
 import threading
 import time
 
 
 class BnetBot:
-    def __init__(self, config=None, debug=False, auto_load=True):
+    def __init__(self, config=None, auto_load=True):
+        self.log = logging.getLogger("bnetbot")
+
         # Load config
         self.config_path = config or "config.json"
         if path.isfile(self.config_path):
@@ -18,12 +21,18 @@ class BnetBot:
                 self.config = json.load(fh)
         else:
             self.config = {}
-        self.debug = debug
+
+        if self.config:
+            self.log.debug("Config loaded: %s", self.config_path)
+        else:
+            self.log.debug("Config not found. Using defaults.")
+        self.log.info("Global logging level set to: %s", logging.getLevelName(self.log.getEffectiveLevel()))
 
         # Load the configured instances.
         self.instances = {}
         self.running = False
         if auto_load:
+            self.log.debug("Loading startup instances...")
             for name, cfg in self.config.get("instances", {}).items():
                 if cfg.get("enabled", True) and name.lower() not in self.instances:
                     self.load_instance(BotInstance(name, cfg), False)
@@ -42,10 +51,9 @@ class BnetBot:
 
         key = inst.name.lower()
         if key not in self.instances:
-            print("Loading instance: %s" % inst.name)
+            self.log.info("Loading instance: %s" % inst.name)
             inst.config["enabled"] = True
             self.instances[key] = inst
-            inst.client.debug_on = self.debug
 
             # Register internally defined commands
             for command, permission, callback in DEFINED_COMMANDS:
@@ -58,6 +66,7 @@ class BnetBot:
         return inst
 
     def start(self):
+        self.log.debug("Starting bot instances...")
         # Start the loaded instances.
         self.running = True
         for inst in self.instances.values():
@@ -67,6 +76,7 @@ class BnetBot:
         self.monitor.start()
 
     def stop(self, force=False):
+        self.log.debug("Stopping bot instances (force: %s)...", force)
         self.running = False
 
         # Disconnect and stop the loaded instances.
@@ -95,13 +105,13 @@ class BnetBot:
 
                 if diff >= (keep_alive_interval * 2) or not inst.client.connected():
                     if inst not in connecting_instances:
-                        print("Monitor has detected instance '%s' as down - attempting to reconnect..." % inst.name)
+                        self.log.warning("Monitor has detected instance '%s' as down - attempting to reconnect..." % inst.name)
                         connecting_instances.append(inst)
                         inst.client.disconnect(True)
 
                     # Reconnect the client
                     if inst.client.connect():
-                        print("Connection successful. Resuming...")
+                        self.log.info("Connection successful. Resuming...")
                         connecting_instances.remove(inst)
                 elif diff >= keep_alive_interval and inst.client.connected():
                     # Send a ping

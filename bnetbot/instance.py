@@ -1,16 +1,9 @@
 
-from bnetbot.capi import CapiClient
-from bnetbot.commands import *
-from bnetbot.database import UserDatabase
-from bnetbot.events import *
+from .capi import CapiClient
+from .commands import *
+from .database import UserDatabase
 
-
-def raise_event(e, *args):
-    if isinstance(e, PriorityDispatcher):
-        return e.dispatch(*args)
-    elif e is not None:
-        e(*args)
-    return True
+import logging
 
 
 class BotInstance:
@@ -20,34 +13,24 @@ class BotInstance:
         self.commands = {}
         self.database = UserDatabase.load(self.config)
 
+        self.log = logging.getLogger("bnetbot." + self.name)
+        if "log_level" in self.config and self.log.getEffectiveLevel() != logging.DEBUG:
+            # If a custom log level is defined and we aren't in debug mode, use the configured level.
+            self.log.setLevel(self.config["log_level"])
+
         # Create chat client and hook events
         self.client = CapiClient(self.config.get("api_key"))
-        self._hook_events(self.client)
-
-        # Create dispatchers for relayed client events.
-        self.handle_joined_chat = PriorityDispatcher()
-        self.handle_user_joined = PriorityDispatcher()
-        self.handle_user_update = PriorityDispatcher()
-        self.handle_user_left = PriorityDispatcher()
-        self.handle_user_talk = PriorityDispatcher()
-        self.handle_bot_message = PriorityDispatcher()
-        self.handle_whisper = PriorityDispatcher()
-        self.handle_emote = PriorityDispatcher()
-        self.handle_info = PriorityDispatcher()
-        self.handle_error = PriorityDispatcher()
+        self.client.hook(self)
 
     def start(self):
-        self.print("Connecting...")
+        self.log.debug("Connecting to CAPI endpoint '%s' ..." % self.client.endpoint)
         if self.client.connect():
-            self.print("Connected!")
+            self.log.debug("Connection established!")
 
     def stop(self, force=False):
-        self.print("Stopping...")
+        self.log.debug("Shutting down instance...")
         self.client.disconnect(force)
         self.database.save(self.config)
-
-    def print(self, text):
-        print("[%s] %s" % (self.name, text))
 
     def send(self, message, target=None):
         lines = message.replace('\r', '').split('\n') if isinstance(message, str) else message
@@ -84,78 +67,42 @@ class BotInstance:
         command = self.commands.get(instance.command.lower())
 
         if command:
-            self.print("Attempting to run command '%s' as user '%s' with arguments: %s." %
-                       (instance.command, user.name if user else run_as, instance.args))
+            self.log.info("Attempting to run command '%s' as user '%s' with arguments: %s." %
+                          (instance.command, user.name if user else run_as, instance.args))
 
             if command.permission is None or (user and user.check_permission(command.permission)):
                 command.callback(instance)
             elif user:
                 instance.respond("You do not have permission to use that command.")
-                self.print("Access denied for user '%s' - missing required permission: %s." %
-                           (user.name, command.permission))
+                self.log.warning("Access denied for user '%s' - missing required permission: %s." %
+                                 (user.name, command.permission))
             else:
-                self.print("Access denied for user '%s' - no permissions" % run_as)
+                self.log.warning("Access denied for user '%s' - no permissions" % run_as)
         else:
             instance.respond("Unrecognized command.")
         return instance
 
-    def _handle_joined_chat(self, channel, user):
-        self.print("Logged on as '%s' in channel '%s'" % (user.name, channel))
-        raise_event(self.handle_joined_chat, channel, user)
+    def _handle_joined_chat(self, client, channel, user):
+        self.log.info("Logged on as '%s' in channel '%s'" % (user.name, channel))
 
-    def _handle_user_joined(self, user):
-        raise_event(self.handle_user_joined, user)
-
-    def _handle_user_update(self, user, flags, attributes):
-        raise_event(self.handle_user_update, user, flags, attributes)
-
-    def _handle_user_left(self, username):
-        raise_event(self.handle_user_left, username)
-
-    def _handle_user_talk(self, user, message):
-        if not raise_event(self.handle_user_talk, user, message):
-            return
-
+    def _handle_user_talk(self, client, user, message):
         cmd = self.parse_command(message, SOURCE_PUBLIC)
         if cmd:
             self.execute_command(cmd, user.name)
 
-    def _handle_bot_message(self, message):
-        raise_event(self.handle_bot_message, message)
-
-    def _handle_whisper(self, user, message, received):
-        if not raise_event(self.handle_whisper, user, message, received):
-            return
-
-        # For our own outgoing whispers, nothing further needs to be done.
-        if not received:
-            return
-
+    def _handle_whisper_received(self, client, user, message):
         cmd = self.parse_command(message, SOURCE_PRIVATE)
         if cmd:
             self.execute_command(cmd, user.name)
 
-    def _handle_emote(self, user, message):
-        raise_event(self.handle_emote, user, message)
+    def _handle_left_chat(self, client):
+        self.log.warning("Disconnected from chat.")
 
-    def _handle_info(self, message):
-        raise_event(self.handle_info, message)
+    def _handle_client_error(self, client, error):
+        self.log.error("Client error: %s", error.message)
 
-    def _handle_error(self, message):
-        self.print("ERROR: %s" % message)
-        raise_event(self.handle_error, message)
+    def _handle_protocol_message_received(self, client, data):
+        self.log.debug("Received message: %s", data)
 
-    def _hook_events(self, client):
-        if not isinstance(client, CapiClient):
-            return
-
-        client.handle_joined_chat = self._handle_joined_chat
-        client.handle_user_joined = self._handle_user_joined
-        client.handle_user_update = self._handle_user_update
-        client.handle_user_left = self._handle_user_left
-        client.handle_user_talk = self._handle_user_talk
-        client.handle_bot_message = self._handle_bot_message
-        client.handle_whisper = self._handle_whisper
-        client.handle_emote = self._handle_emote
-        client.handle_info = self._handle_info
-        client.handle_error = self._handle_error
+    def _handle_protocol_message_sent(self, client, data):
+        self.log.debug("Sent message: %s", data)
