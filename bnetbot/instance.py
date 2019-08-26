@@ -12,7 +12,7 @@ class BotInstance:
         self.name = name or "Unnamed"
         self.config = config or {}
         self.commands = {}
-        self.database = UserDatabase.load(self.config)
+        self.database = UserDatabase.load(self.config.get("database"))
         self._uptime = None
 
         self.log = logging.getLogger("bnetbot." + self.name)

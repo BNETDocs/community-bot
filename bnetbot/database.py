@@ -69,12 +69,11 @@ class UserDatabase:
     @classmethod
     def load(cls, config):
         db = UserDatabase()
-        data = config.get("database")
-        if data is None:
+        if config is None:
             return db  # No database found in config - return empty
 
         # Load group names and metadata
-        group_list = data.get("groups", {})
+        group_list = config.get("groups", {})
         for name, group in group_list.items():
             db.groups[name.lower()] = DatabaseItem.load(group, name, True)
 
@@ -86,7 +85,7 @@ class UserDatabase:
                 item.groups[group_name] = db.groups.get(group_name)
 
         # Load users
-        for name, user in data.get("users", {}).items():
+        for name, user in config.get("users", {}).items():
             item = DatabaseItem.load(user, name, False)
             db.users[name.lower()] = item
 
