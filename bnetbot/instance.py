@@ -3,6 +3,7 @@ from .capi import CapiClient
 from .commands import *
 from .database import UserDatabase
 
+from datetime import datetime
 import logging
 
 
@@ -12,6 +13,7 @@ class BotInstance:
         self.config = config or {}
         self.commands = {}
         self.database = UserDatabase.load(self.config)
+        self._uptime = None
 
         self.log = logging.getLogger("bnetbot." + self.name)
         if "log_level" in self.config and self.log.getEffectiveLevel() != logging.DEBUG:
@@ -21,6 +23,10 @@ class BotInstance:
         # Create chat client and hook events
         self.client = CapiClient(self.config.get("api_key"))
         self.client.hook(self)
+
+    @property
+    def uptime(self):
+        return datetime.utcnow() - self._uptime
 
     def start(self):
         self.log.debug("Connecting to CAPI endpoint '%s' ..." % self.client.endpoint)
@@ -83,6 +89,7 @@ class BotInstance:
         return instance
 
     def _handle_joined_chat(self, client, channel, user):
+        self._uptime = datetime.utcnow()
         self.log.info("Logged on as '%s' in channel '%s'" % (user.name, channel))
 
     def _handle_user_talk(self, client, user, message):

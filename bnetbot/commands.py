@@ -167,7 +167,7 @@ class InternalCommands:
 
     @staticmethod
     def uptime(c):
-        seconds = int((datetime.utcnow() - c.bot.client.uptime).total_seconds())
+        seconds = int(c.bot.uptime.total_seconds())
         hours, rem = divmod(seconds, 3600)
         minutes, seconds = divmod(rem, 60)
         days, hours = divmod(hours, 24)
