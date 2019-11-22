@@ -38,7 +38,7 @@ def main():
 
         # Find an instance with a matching API key
         instances = bot.config.get("instances", {})
-        for name, cfg in instances.values():
+        for name, cfg in instances.items():
             if cfg.get("api_key").lower() == p_args.apikey.lower():
                 inst = instance.BotInstance(name, cfg)
                 break
