@@ -48,7 +48,7 @@ class CommandInstance:
 
         if self.source == SOURCE_LOCAL:
             for msg in self.response:
-                self.bot.print(msg)
+                print(msg)
         else:
             self.bot.send(self.response, self.user.name if self.source == SOURCE_PRIVATE else None)
 
