@@ -63,7 +63,7 @@ class BotInstance:
             args = message.split()
             cmd = args[0][len(trigger):]
             args = args[1:] if len(args) > 1 else []
-            return CommandInstance(cmd, args, source, trigger, self)
+            return CommandInstance(cmd, self, args, source, trigger)
 
     def execute_command(self, instance, run_as=None):
         """Executes a command.
