@@ -119,9 +119,4 @@ class BnetBot:
                     # Send a ping
                     inst.client.ping(str(now))
 
-                # Check for needed config writes
-                if inst.database.needs_write:
-                    self.save_config()
-                    inst.database.needs_write = False
-
             time.sleep(1)

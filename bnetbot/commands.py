@@ -149,6 +149,9 @@ class AdminCommands:
             if not item:
                 # This user isn't in the database, so add them.
                 item = db.add(DatabaseItem(target, False))
+            else:
+                item.modified = datetime.now()
+                item.modified_by = c.user.name
 
             allow = allow in [None, "true", "allow"]
             item.permissions[value.lower()] = allow
@@ -156,7 +159,7 @@ class AdminCommands:
                       (value.lower(), item_type, item.name, "ALLOW" if allow else "DENY"))
 
         # Save changes to the config
-        db.save(c.bot.config)
+        c.bot.save()
 
 
 class InternalCommands:

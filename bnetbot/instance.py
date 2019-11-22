@@ -38,7 +38,11 @@ class BotInstance:
         """Disconnects and shuts down the bot instance."""
         self.log.debug("Shutting down instance...")
         self.client.disconnect(force)
-        self.database.save(self.config)
+        self.save()
+
+    def save(self):
+        """Saves the instance's configuration."""
+        self.config["database"] = self.database
 
     def send(self, message, target=None):
         """Sends a chat message to the connected channel.

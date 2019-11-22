@@ -27,7 +27,12 @@ class UserDatabase:
     def __init__(self):
         self.groups = get_default_groups()
         self.users = get_default_users()
-        self.needs_write = False
+
+    def __dict__(self):
+        return {
+            "groups": self.groups.items(),
+            "users": self.users.items()
+        }
 
     def add(self, item):
         """Adds a user object to the database."""
@@ -58,17 +63,6 @@ class UserDatabase:
     def group(self, group_name):
         """Returns a group object matching a given name."""
         return self.groups.get(group_name.lower())
-
-    def save(self, config):
-        data = {"groups": {}, "users": {}}
-
-        for group in self.groups.values():
-            group.save(data)
-        for user in self.users.values():
-            user.save(data)
-
-        config["database"] = data
-        self.needs_write = True
 
     @classmethod
     def load(cls, config):
@@ -111,6 +105,15 @@ class DatabaseItem:
         self.modified = None
         self.modified_by = None
 
+    def __dict__(self):
+        d = {
+            "permissions": self.permissions or {},
+            "added": self.added.isoformat() if self.added else None,
+            "modified": self.modified.isoformat() if self.modified else None,
+            "modified_by": self.modified_by
+        }
+        return {k: v for k, v in d.items() if v}
+
     def check_permission(self, permission):
         """Checks that the item has a permission."""
         permission = permission.lower()
@@ -149,18 +152,6 @@ class DatabaseItem:
     def group_list(self):
         """Returns a list of groups this item is member to."""
         return [g.name for g in self.groups.values()]
-
-    def save(self, config):
-        item = config["groups" if self.is_group else "users"][self.name] = {}
-
-        item["permissions"] = self.permissions or {}
-
-        if self.added:
-            item["added"] = self.added.isoformat()
-        if self.modified:
-            item["modified"] = self.modified.isoformat()
-        if self.modified_by:
-            item["modified_by"] = self.modified_by
 
     @classmethod
     def load(cls, data, name, is_group):
