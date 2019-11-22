@@ -20,8 +20,15 @@ class CommandDefinition:
 
 
 class CommandInstance:
-    """A request to execute a command."""
     def __init__(self, command, args=None, source=None, trigger=None, bot=None):
+    """A request to execute a command.
+
+        command: the name of the command
+        args: a list of supplied command arguments
+        source: the context from where the command was executed
+        trigger: the trigger character or phrase used
+        bot: the bot instance where the command was triggered
+    """
         self.command = command
         self.args = args or []
         self.source = source or SOURCE_INTERNAL

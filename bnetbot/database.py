@@ -30,6 +30,7 @@ class UserDatabase:
         self.needs_write = False
 
     def add(self, item):
+        """Adds a user object to the database."""
         if not isinstance(item, DatabaseItem):
             raise TypeError("Can't add type %s to user database." % type(item).__name__)
 
@@ -40,6 +41,7 @@ class UserDatabase:
         return item
 
     def remove(self, item):
+        """Removes a user object from the database."""
         if not isinstance(item, DatabaseItem):
             raise TypeError("Can't remove type %s from the user database." % type(item).__name__)
 
@@ -50,9 +52,11 @@ class UserDatabase:
         return None
 
     def user(self, username):
+        """Returns a user object matching a given name."""
         return self.users.get(username.lower())
 
     def group(self, group_name):
+        """Returns a group object matching a given name."""
         return self.groups.get(group_name.lower())
 
     def save(self, config):
@@ -68,6 +72,7 @@ class UserDatabase:
 
     @classmethod
     def load(cls, config):
+        """Loads a user database from the 'database' element of an instance's configuration."""
         db = UserDatabase()
         if config is None:
             return db  # No database found in config - return empty
@@ -107,6 +112,7 @@ class DatabaseItem:
         self.modified_by = None
 
     def check_permission(self, permission):
+        """Checks that the item has a permission."""
         permission = permission.lower()
 
         # Check for permission provided by a group assignment
@@ -129,6 +135,7 @@ class DatabaseItem:
         return group_perm or direct_perm
 
     def get_permissions(self):
+        """Returns the effective permission of this item, including permissions of parent groups."""
         perms = []
         for group in filter(None, self.groups.values()):
             perms.extend(group.get_permissions())
@@ -140,6 +147,7 @@ class DatabaseItem:
         return list(set(perms))
 
     def group_list(self):
+        """Returns a list of groups this item is member to."""
         return [g.name for g in self.groups.values()]
 
     def save(self, config):
@@ -156,6 +164,7 @@ class DatabaseItem:
 
     @classmethod
     def load(cls, data, name, is_group):
+        """Creates an item from a database entry."""
         item = DatabaseItem(name, is_group)
         item.permissions = data.get("permissions", {})
         item.added = parse_isoformat(data.get("added")) or datetime.now()
